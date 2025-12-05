@@ -1,50 +1,79 @@
-# Abi
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-Abi is an AI grant copilot for Turkish SMEs and startups. Draft an R&D project 1‑pager with Gemini, get eligibility scores against TÜBİTAK/KOSGEB programs, manage submission documents, and track incorporation steps in one glassmorphic workspace.
+# Project Summary — AI-powered grants, funding & incorporation coach
 
-## Features
-- AI Coach chat that turns a rough idea into a TÜBİTAK/KOSGEB-ready “Project 1-Pager”.
-- Fund Matcher that prompts Gemini with a JSON schema to score eligibility and explain rationales for each fund.
-- Document Vault with upload slots, statuses, and counts (stored in-memory for now).
-- Incorporation guide and compliance calendar tailored to Turkey (A.Ş./Ltd.).
-- Dashboard with quick actions, progress ring, notifications, and schedule.
+Purpose
+To help organizations, research teams, and startups find and apply for international funding by extracting insights from their project files, aligning applications with institution templates, and providing country-specific incorporation guidance.
 
-## Tech Stack
-- React 19 + TypeScript on Vite 6.
-- Tailwind via CDN with a custom theme defined in `index.html`.
-- Google GenAI SDK (`@google/genai`) and lucide-react icons.
+What it does (short)
 
-## Getting Started
-1) Install dependencies  
-`npm install`
+- Idea capture: AI-assisted conversation that converts ideas into a concise project draft (1-pager + assessment).
+- Fund matching: Produces a ranked list of suitable international calls/funders with clear justification.
+- Eligibility analysis: Applies hard gates and weighted criteria (0–100) with evidence-backed explanations.
+- Application generation: Auto-fills institution templates (DOCX/PDF) and flags missing or weak fields.
+- Document checklist: Extracts required/optional documents and tracks completion as users upload files.
+- Incorporation guidance: Country-aware checklists and early compliance tasks with calendar reminders.
 
-2) Configure Gemini API key (exposed client-side)  
-Create `.env.local` with:  
-`GEMINI_API_KEY=your_key_here`
+Inputs / Outputs
 
-3) Run the dev server  
-`npm run dev`
+- Input: Project files (summary, work plan, budget, appendices) or an idea captured via chat.
+- System sources: Versioned rule and template sets for funders and institutions (managed internally).
+- Output: Eligibility score and rationale, ranked fund matches, missing-documents list, draft application aligned to the selected template, and a downloadable package (report + checklist + calendar items).
 
-Optional: build for production with `npm run build` and preview locally via `npm run preview`.
+Core modules
 
-## Usage Flow
-1) Start in the Dashboard to view progress and shortcuts.  
-2) Open **AI Coach** to chat about the idea and generate a Project 1-Pager.  
-3) Go to **Fund Matcher** to run eligibility analysis and view ranked funds with rationales.  
-4) Use **Documents** to upload required files and track status.  
-5) Follow **Incorporation** steps and deadlines for company setup.
+- Rule Engine (Rule-DSL): Deterministic rules like `eligible_if ...; score = ...` that link decisions to template clauses.
+- Fund Matcher: Maps project attributes (domain, TRL, budget, timeline) to suitable calls and ranks them.
+- Template Filler: Populates template fields from project data and generates guidance for remaining blanks.
+- Document Manager: Identifies required documents, matches uploads, and tracks completion.
+- Incorporation Flow: Country-aware task flows and reminders for company formation and early compliance.
+- Reporter: Exports DOCX/PDF packages and creates ZIP bundles for submissions.
 
-## Project Structure
-- `App.tsx` – top-level state (project, documents, matches) and tab routing.  
-- `components/` – UI sections: `Layout`, `Dashboard`, `IdeaAgent`, `FundMatcher`, `DocumentManager`, `IncorporationGuide`.  
-- `services/geminiService.ts` – Gemini chat session, 1-pager generation, and fund eligibility analysis (schema-enforced JSON).  
-- `constants.ts` – seed funds, incorporation steps, and avatar reference.  
-- `types.ts` – shared data models.  
-- `index.html` – Tailwind config/theme and CDN import map for AI Studio hosting.  
-- `vite.config.ts` – injects `GEMINI_API_KEY` as `process.env.API_KEY` for the client.
+Main flow (summary)
 
-## Notes and Limitations
-- Frontend-only prototype: no persistence; uploads live in memory until refresh.  
-- Gemini key is exposed in the browser; use a client-safe key or proxy in production.  
-- Fund catalog is small and heuristic; extend `constants.ts` with richer criteria for better matches.  
-- No tests or linting configured yet.***
+1. User uploads project files or creates a draft via the AI agent.
+2. System extracts features and generates a project profile.
+3. Fund Matcher proposes suitable international calls and ranks them.
+4. Eligibility Analysis produces a scored assessment with evidence links.
+5. Template Filler creates a draft application; Document Manager lists missing items.
+6. Incorporation guidance can be enabled to produce country-specific next steps and calendar reminders.
+
+Guiding principles
+
+- Evidence-based: Every recommendation links to the relevant rule or template clause.
+- Versioning: Rules and templates are version-controlled; outputs are stamped with `template_version`.
+- Privacy & security: Organization-scoped data isolation, encryption, and audit logging.
+
+Phases (brief)
+
+- Phase 1: Core flows — idea capture, fund matching, eligibility scoring, and template filling.
+- Phase 2: Expand fund/template library, improve evidence linking, and add more country incorporation flows.
+
+At startup, the app reads `RULES.md` to initialize rules and templates and loads the memory bank. Request clarification when project data is ambiguous.
+
+---
+
+Run locally
+
+Prerequisites: Node.js
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Add any required API keys or environment variables (for example, model or LLM keys) to `.env.local`.
+3. Run the app:
+
+```bash
+npm run dev
+```
+
+Optional tasks I can help with:
+
+- Add a short `CONTRIBUTING.md` or `QUICKSTART.md`.
+- Create a minimal `.env.example` with recommended variables.
+- Localize incorporation guidance for target countries.
