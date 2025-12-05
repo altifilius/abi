@@ -1,8 +1,4 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
-# Project Summary — AI-powered grants, funding & incorporation coach
+# abi: AI-powered grants, funding, incorporation and self business development coach
 
 Purpose
 To help organizations, research teams, and startups find and apply for international funding by extracting insights from their project files, aligning applications with institution templates, and providing country-specific incorporation guidance.
@@ -51,7 +47,7 @@ Phases (brief)
 - Phase 1: Core flows — idea capture, fund matching, eligibility scoring, and template filling.
 - Phase 2: Expand fund/template library, improve evidence linking, and add more country incorporation flows.
 
-At startup, the app reads `RULES.md` to initialize rules and templates and loads the memory bank. Request clarification when project data is ambiguous.
+## Getting Started
 
 ---
 
