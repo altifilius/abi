@@ -5,6 +5,8 @@ import FundMatcher from './components/FundMatcher';
 import IncorporationGuide from './components/IncorporationGuide';
 import DocumentManager from './components/DocumentManager';
 import Dashboard from './components/Dashboard';
+import Settings from './components/Settings';
+import Help from './components/Help';
 import { Project, ProjectStage, FundMatch, ProjectDocument } from './types';
 
 const INITIAL_PROJECT: Project = {
@@ -63,6 +65,10 @@ const App: React.FC = () => {
         return <DocumentManager documents={project.documents} onUpload={handleDocUpload} />;
       case 'incorporation':
         return <IncorporationGuide />;
+      case 'settings':
+        return <Settings />;
+      case 'help':
+        return <Help />;
       default:
         return <Dashboard project={project} onNavigate={setActiveTab} />;
     }

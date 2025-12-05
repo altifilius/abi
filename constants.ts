@@ -84,4 +84,5 @@ export const INCORPORATION_STEPS: IncorporationStep[] = [
   }
 ];
 
-export const ABI_AVATAR_URL = "./altafilius1.png";
+// Default avatar uses Gravatar identicon; replace the hash or query params to personalize.
+export const ABI_AVATAR_URL = "https://www.gravatar.com/avatar/?d=identicon&s=160";

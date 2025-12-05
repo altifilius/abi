@@ -51,20 +51,26 @@ Phases (brief)
 
 ---
 
-Run locally
+Run locally (Bun)
 
-Prerequisites: Node.js
+Prerequisites: Bun (https://bun.sh). Node 18+ also works, but Bun is the default.
 
 1. Install dependencies:
 
 ```bash
-npm install
+bun install
 ```
 
 2. Add any required API keys or environment variables (for example, model or LLM keys) to `.env.local`.
 3. Run the app:
 
 ```bash
+bun run dev
+```
+
+If you prefer npm:
+```bash
+npm install
 npm run dev
 ```
 

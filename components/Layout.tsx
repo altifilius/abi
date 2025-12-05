@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LayoutDashboard, MessageSquare, CheckCircle, FileText, Building2, Settings, HelpCircle, Menu, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ABI_AVATAR_URL } from '../constants';
+import { useI18n } from '../i18n';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,13 +11,16 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+   const { t, language, setLanguage } = useI18n();
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'idea-agent', label: 'AI Coach', icon: MessageSquare },
-    { id: 'fund-matcher', label: 'Fund Matcher', icon: CheckCircle },
-    { id: 'documents', label: 'Documents', icon: FileText },
-    { id: 'incorporation', label: 'Incorporation', icon: Building2 },
+    { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'idea-agent', label: t('nav.aiCoach'), icon: MessageSquare },
+    { id: 'fund-matcher', label: t('nav.fundMatcher'), icon: CheckCircle },
+    { id: 'documents', label: t('nav.documents'), icon: FileText },
+    { id: 'incorporation', label: t('nav.incorporation'), icon: Building2 },
+    { id: 'settings', label: t('nav.settings'), icon: Settings },
+    { id: 'help', label: t('nav.help'), icon: HelpCircle },
   ];
 
   return (
@@ -38,7 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </div>
             <div className={`overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
               <h1 className="font-bold text-lg text-white whitespace-nowrap">ScaleUp Inc.</h1>
-              <p className="text-sm text-text-secondary whitespace-nowrap">Project Workspace</p>
+              <p className="text-sm text-text-secondary whitespace-nowrap">{t('layout.workspace')}</p>
             </div>
           </div>
           
@@ -64,37 +68,36 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 </button>
               );
             })}
-             <button
-                  title={isCollapsed ? "Schedule" : undefined}
-                  className={`flex items-center gap-3 px-4 py-3 text-text-secondary hover:bg-white/5 hover:text-white rounded-2xl transition-colors ${isCollapsed ? 'justify-center px-2' : ''}`}
-                >
-                  <Calendar size={20} className="flex-shrink-0" />
-                  <span className={`overflow-hidden transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                    Schedule
-                  </span>
+            <button
+              title={isCollapsed ? t('nav.schedule') : undefined}
+              className={`flex items-center gap-3 px-4 py-3 text-text-secondary hover:bg-white/5 hover:text-white rounded-2xl transition-colors ${isCollapsed ? 'justify-center px-2' : ''}`}
+            >
+              <Calendar size={20} className="flex-shrink-0" />
+              <span className={`overflow-hidden transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                {t('nav.schedule')}
+              </span>
             </button>
           </nav>
         </div>
 
         <div className="flex flex-col gap-2">
-           <button 
-             title={isCollapsed ? "Settings" : undefined}
-             className={`flex items-center gap-3 px-4 py-3 text-text-secondary hover:bg-white/5 hover:text-white rounded-2xl transition-colors ${isCollapsed ? 'justify-center px-2' : ''}`}
-            >
-             <Settings size={20} className="flex-shrink-0" />
-             <span className={`overflow-hidden transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-               Settings
-             </span>
-           </button>
-           <button 
-             title={isCollapsed ? "Help" : undefined}
-             className={`flex items-center gap-3 px-4 py-3 text-text-secondary hover:bg-white/5 hover:text-white rounded-2xl transition-colors ${isCollapsed ? 'justify-center px-2' : ''}`}
-            >
-             <HelpCircle size={20} className="flex-shrink-0" />
-             <span className={`overflow-hidden transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-               Help
-             </span>
-           </button>
+           <div className={`flex items-center gap-2 px-4 py-3 text-text-secondary rounded-2xl transition-colors ${isCollapsed ? 'justify-center px-2' : 'justify-between'}`}>
+             {!isCollapsed && <span className="text-xs uppercase tracking-wide">{t('layout.language')}</span>}
+             <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+               <button
+                 onClick={() => setLanguage('en')}
+                 className={`px-3 py-2 text-xs font-semibold ${language === 'en' ? 'bg-primary text-background' : 'text-white/80'}`}
+               >
+                 EN
+               </button>
+               <button
+                 onClick={() => setLanguage('tr')}
+                 className={`px-3 py-2 text-xs font-semibold ${language === 'tr' ? 'bg-primary text-background' : 'text-white/80'}`}
+               >
+                 TR
+               </button>
+             </div>
+           </div>
            
            <button 
               onClick={() => setIsCollapsed(!isCollapsed)}

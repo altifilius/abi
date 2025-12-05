@@ -3,6 +3,7 @@ import { Target, AlertCircle, ArrowRight, Loader2, Sparkles, Award } from 'lucid
 import { Project, FundMatch } from '../types';
 import { FUNDS } from '../constants';
 import { analyzeProjectEligibility } from '../services/geminiService';
+import { useI18n } from '../i18n';
 
 interface FundMatcherProps {
   project: Project;
@@ -12,6 +13,7 @@ interface FundMatcherProps {
 const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisDone, setAnalysisDone] = useState(false);
+  const { t } = useI18n();
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
@@ -43,10 +45,10 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
             <div className="p-2 bg-primary/20 rounded-xl text-primary">
                 <Target size={24}/>
             </div>
-            Current Project Context
+            {t('fundMatcher.currentContext')}
         </h3>
         <div className="bg-white/5 p-6 rounded-2xl border border-white/10 text-sm text-text-primary leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto custom-scrollbar">
-          {project.description || "No project description available. Please use the AI Coach to generate one."}
+          {project.description || t('fundMatcher.noDescription')}
         </div>
         
         <div className="mt-6 flex justify-end">
@@ -57,14 +59,14 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
                     className="flex items-center gap-2 bg-primary text-background px-8 py-3 rounded-xl hover:bg-primary/90 disabled:opacity-50 font-bold transition-all shadow-glow-primary"
                 >
                     {isAnalyzing ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                    {isAnalyzing ? "Analyzing Rules..." : "Run Eligibility Analysis"}
+                    {isAnalyzing ? t('fundMatcher.analyzingRules') : t('fundMatcher.runAnalysis')}
                 </button>
             ) : (
                  <button
                     onClick={() => setAnalysisDone(false)}
                     className="text-sm text-text-secondary hover:text-white underline"
                 >
-                    Reset Analysis
+                    {t('fundMatcher.reset')}
                 </button>
             )}
         </div>
@@ -73,7 +75,7 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
       {/* Results */}
       {analysisDone && project.matchedFunds && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
-           <h3 className="text-xl font-bold text-white pl-2">Recommended Funds</h3>
+           <h3 className="text-xl font-bold text-white pl-2">{t('fundMatcher.recommendedFunds')}</h3>
            <div className="grid grid-cols-1 gap-6">
               {project.matchedFunds.map((match) => {
                   const fund = FUNDS.find(f => f.id === match.fundId);
@@ -85,7 +87,7 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
                           
                           {match.eligibilityStatus === 'eligible' && (
                               <div className="absolute top-0 right-0 bg-primary text-background text-xs uppercase font-bold px-4 py-2 rounded-bl-2xl shadow-glow-primary flex items-center gap-1">
-                                  <Award size={14} /> Top Match
+                                  <Award size={14} /> {t('fundMatcher.topMatch')}
                               </div>
                           )}
                           
@@ -95,7 +97,7 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
                                   <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 text-2xl font-bold bg-surface/50 backdrop-blur-md ${getScoreColor(match.score)}`}>
                                       {match.score}
                                   </div>
-                                  <span className="text-xs font-semibold uppercase text-text-secondary tracking-wider">Fit Score</span>
+                                  <span className="text-xs font-semibold uppercase text-text-secondary tracking-wider">{t('fundMatcher.fitScore')}</span>
                               </div>
 
                               {/* Details */}
@@ -109,21 +111,21 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
                                   
                                   <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-4 backdrop-blur-sm">
                                       <p className="text-xs font-bold text-secondary uppercase mb-2 flex items-center gap-2">
-                                          <AlertCircle size={14} /> AI Rationale
+                                          <AlertCircle size={14} /> {t('fundMatcher.aiRationale')}
                                       </p>
                                       <p className="text-sm text-white italic">"{match.rationale}"</p>
                                   </div>
 
                                   <div className="flex items-center gap-6 text-xs text-text-secondary font-medium">
-                                      <span className="flex items-center gap-1">Max Budget: <span className="text-white font-bold text-sm">{fund.maxBudget}</span></span>
-                                      <span className="flex items-center gap-1">Support: <span className="text-white font-bold text-sm">{fund.supportRate}</span></span>
+                                      <span className="flex items-center gap-1">{t('fundMatcher.maxBudget')}: <span className="text-white font-bold text-sm">{fund.maxBudget}</span></span>
+                                      <span className="flex items-center gap-1">{t('fundMatcher.supportRate')}: <span className="text-white font-bold text-sm">{fund.supportRate}</span></span>
                                   </div>
                               </div>
 
                               {/* Action */}
                               <div className="flex flex-col justify-center">
                                   <button className="flex items-center gap-2 text-background bg-primary hover:bg-white font-bold px-6 py-3 rounded-xl transition-all shadow-glow-primary">
-                                      Start Application <ArrowRight size={18} />
+                                      {t('fundMatcher.startApplication')} <ArrowRight size={18} />
                                   </button>
                               </div>
                           </div>

@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { Calendar, CheckSquare, Building, Landmark, Scale, Clock } from 'lucide-react';
 import { IncorporationStep } from '../types';
 import { INCORPORATION_STEPS } from '../constants';
+import { useI18n } from '../i18n';
 
 const IncorporationGuide: React.FC = () => {
   const [steps, setSteps] = useState<IncorporationStep[]>(INCORPORATION_STEPS);
+  const { t } = useI18n();
 
   const toggleStep = (id: string) => {
     setSteps(steps.map(s => 
@@ -30,11 +32,11 @@ const IncorporationGuide: React.FC = () => {
         <div className="bg-glass-dark p-8 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h3 className="text-xl font-bold text-white">Establishment Roadmap</h3>
-                    <p className="text-sm text-text-secondary">Turkey (A.Ş. / Ltd.)</p>
+                    <h3 className="text-xl font-bold text-white">{t('incorporation.roadmapTitle')}</h3>
+                    <p className="text-sm text-text-secondary">{t('incorporation.country')}</p>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-white bg-white/5 px-4 py-2 rounded-xl border border-white/10">
-                    <span className="font-bold text-primary">{progress}%</span> Complete
+                    <span className="font-bold text-primary">{progress}%</span> {t('incorporation.complete')}
                 </div>
             </div>
 
@@ -79,13 +81,13 @@ const IncorporationGuide: React.FC = () => {
                                     step.category === 'tax' ? 'bg-primary/10 text-primary border-primary/30' :
                                     'bg-orange-500/10 text-orange-400 border-orange-500/30'
                                 }`}>
-                                   {getCategoryIcon(step.category)} {step.category}
+                                   {getCategoryIcon(step.category)} {t(`incorporation.category.${step.category}`)}
                                 </span>
                                 <h4 className={`font-semibold ${step.completed ? 'text-text-secondary line-through' : 'text-white'}`}>
-                                    {step.title}
+                                    {t(`incorporation.step.${step.id}.title`)}
                                 </h4>
                             </div>
-                            <p className="text-sm text-text-secondary">{step.description}</p>
+                            <p className="text-sm text-text-secondary">{t(`incorporation.step.${step.id}.desc`)}</p>
                         </div>
                     </div>
                 ))}
@@ -98,7 +100,7 @@ const IncorporationGuide: React.FC = () => {
         <div className="bg-glass-dark p-6 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl">
             <h4 className="font-bold flex items-center gap-2 mb-6 text-white">
                 <Calendar size={20} className="text-secondary" />
-                Upcoming Deadlines
+                {t('incorporation.upcomingDeadlines')}
             </h4>
             
             <div className="space-y-4">
@@ -108,8 +110,8 @@ const IncorporationGuide: React.FC = () => {
                         <div className="text-lg font-bold text-white">26</div>
                     </div>
                     <div>
-                        <p className="text-sm font-bold text-white">VAT Declaration</p>
-                        <p className="text-xs text-text-secondary mt-1">Monthly submission</p>
+                        <p className="text-sm font-bold text-white">{t('incorporation.vatDeclaration')}</p>
+                        <p className="text-xs text-text-secondary mt-1">{t('incorporation.vatSub')}</p>
                     </div>
                 </div>
                  <div className="flex gap-4 items-start p-3 bg-white/5 rounded-2xl border border-white/5">
@@ -118,14 +120,14 @@ const IncorporationGuide: React.FC = () => {
                         <div className="text-lg font-bold text-white">31</div>
                     </div>
                     <div>
-                        <p className="text-sm font-bold text-white">SGK Premiums</p>
-                        <p className="text-xs text-text-secondary mt-1">Insurance payment</p>
+                        <p className="text-sm font-bold text-white">{t('incorporation.sgkPremiums')}</p>
+                        <p className="text-xs text-text-secondary mt-1">{t('incorporation.sgkSub')}</p>
                     </div>
                 </div>
             </div>
 
             <button className="w-full mt-6 py-3 border border-white/10 rounded-xl text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-white transition-colors flex items-center justify-center gap-2">
-                <Clock size={16} /> Export to Calendar
+                <Clock size={16} /> {t('incorporation.exportCalendar')}
             </button>
         </div>
       </div>

@@ -3,17 +3,19 @@ import { Send, Bot, User, Sparkles, FileText, Cpu } from 'lucide-react';
 import { createChatSession, generateDraftOnePager } from '../services/geminiService';
 import { ChatMessage } from '../types';
 import { ABI_AVATAR_URL } from '../constants';
+import { useI18n } from '../i18n';
 
 interface IdeaAgentProps {
   onProjectCreate: (desc: string) => void;
 }
 
 const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'model',
-      text: 'Hello! I am Abi, your AI Grant Consultant. Tell me about your project idea. What innovation are you planning to develop?',
+      text: t('ideaAgent.welcome'),
       timestamp: Date.now()
     }
   ]);
@@ -72,7 +74,7 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
     const summaryMsg: ChatMessage = {
         id: 'summary',
         role: 'model',
-        text: `Here is a draft summary of your project based on our chat:\n\n${summary}`,
+        text: `${t('ideaAgent.summaryIntro')}\n\n${summary}`,
         timestamp: Date.now()
     };
     setMessages(prev => [...prev, summaryMsg]);
@@ -89,8 +91,8 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
                 <img src={ABI_AVATAR_URL} alt="Abi" className="w-full h-full object-cover" />
            </div>
            <div>
-               <h3 className="text-white font-semibold">Abi - Project Coach</h3>
-               <p className="text-xs text-text-secondary">AI-assisted brainstorming</p>
+               <h3 className="text-white font-semibold">{t('ideaAgent.headerTitle')}</h3>
+               <p className="text-xs text-text-secondary">{t('ideaAgent.headerSubtitle')}</p>
            </div>
       </div>
 
@@ -124,7 +126,7 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
         ))}
         {isTyping && (
            <div className="flex items-center gap-2 text-primary text-xs ml-16 animate-pulse">
-             <Sparkles size={14} /> Abi is thinking...
+             <Sparkles size={14} /> {t('ideaAgent.isThinking')}
            </div>
         )}
         <div ref={chatEndRef} />
@@ -139,7 +141,7 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
                   className="flex items-center gap-2 bg-secondary/20 hover:bg-secondary/30 text-secondary px-6 py-2 rounded-full text-xs font-semibold transition-all border border-secondary/50 shadow-glow-secondary"
                 >
                     <FileText size={14} />
-                    Generate Project 1-Pager
+                    {t('ideaAgent.generateOnePager')}
                 </button>
             </div>
         )}
@@ -147,7 +149,7 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
           <input
             type="text"
             className="flex-1 bg-white/5 text-white placeholder-text-secondary/50 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/50 border border-white/10 transition-all"
-            placeholder="Describe your innovation..."
+            placeholder={t('ideaAgent.placeholder')}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
