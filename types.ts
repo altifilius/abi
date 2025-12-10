@@ -54,3 +54,13 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
 }
+
+// Persistence-specific types (localStorage-safe)
+export type PersistedProjectDocument = Omit<ProjectDocument, 'file'>;
+
+export interface ProjectPersistedState {
+  version: number;
+  description?: string;
+  matchedFunds?: FundMatch[];
+  documents?: PersistedProjectDocument[];
+}
