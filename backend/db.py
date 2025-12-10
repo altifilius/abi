@@ -4,10 +4,10 @@ from typing import AsyncIterator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-# Async SQLAlchemy setup
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/abi")
+from .settings import settings
 
-engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+# Async SQLAlchemy setup
+engine = create_async_engine(settings.database_url, echo=False, future=True)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 Base = declarative_base()

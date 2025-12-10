@@ -3,6 +3,7 @@ import asyncio
 
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from openai import OpenAIError
 
 from .db import get_session, init_db
 from .schemas import IdeaRequest, AnalyzeIdeaResponse
@@ -26,9 +27,8 @@ async def analyze_idea(payload: IdeaRequest, session: AsyncSession = Depends(get
         )
         analysis = await analyze_idea_with_report(session, idea_profile)
         return analysis
-    except NotImplementedError as e:
-        # OpenAI calls are stubbed; surface a friendly error for now.
-        raise HTTPException(status_code=501, detail=str(e))
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail="Upstream LLM error") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Analysis failed") from e
 

@@ -2,7 +2,7 @@ from datetime import datetime
 import uuid
 from typing import Optional
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, ForeignKey, JSON
+from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -15,9 +15,14 @@ def uuid_str() -> str:
 
 class ReportChunk(Base):
     __tablename__ = "report_chunks"
+    __table_args__ = (
+        UniqueConstraint("report_id", "page", "chunk_index", name="uq_chunk_report_page_idx"),
+    )
 
     id = Column(String, primary_key=True, default=uuid_str)
+    report_id = Column(String, nullable=False)
     page = Column(Integer, nullable=False)
+    chunk_index = Column(Integer, nullable=False)
     section_title = Column(String, nullable=True)
     text = Column(Text, nullable=False)
     embedding = Column(Vector, nullable=False)
