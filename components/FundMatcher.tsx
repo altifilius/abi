@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Target, AlertCircle, ArrowRight, Loader2, Sparkles, Award } from 'lucide-react';
 import { Project, FundMatch } from '../types';
 import { FUNDS } from '../constants';
-import { analyzeProjectEligibility } from '../services/geminiService';
+import { analyzeProjectEligibility, isMissingApiKeyError } from '../services/geminiService';
 import { useI18n } from '../i18n';
 
 interface FundMatcherProps {
@@ -13,22 +13,46 @@ interface FundMatcherProps {
 const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisDone, setAnalysisDone] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisEmpty, setAnalysisEmpty] = useState(false);
   const { t } = useI18n();
 
-  const runAnalysis = async () => {
-    setIsAnalyzing(true);
-    const results = await analyzeProjectEligibility(project.description);
-    
-    const matches: FundMatch[] = results.map((r: any) => ({
-      fundId: r.fundId,
-      score: r.score,
-      rationale: r.rationale,
-      eligibilityStatus: r.eligibilityStatus
-    })).sort((a: FundMatch, b: FundMatch) => b.score - a.score);
+  const getErrorMessage = (error: unknown) => {
+    if (isMissingApiKeyError(error)) return t('common.missingApiKey');
+    if (error instanceof Error && error.message) return error.message;
+    return t('fundMatcher.error.generic');
+  };
 
-    onUpdateMatches(matches);
-    setAnalysisDone(true);
-    setIsAnalyzing(false);
+  const runAnalysis = async () => {
+    if (!project.description || !project.description.trim()) {
+      setAnalysisError(t('fundMatcher.error.noDescription'));
+      return;
+    }
+
+    setAnalysisError(null);
+    setAnalysisEmpty(false);
+    setAnalysisDone(false);
+    setIsAnalyzing(true);
+    try {
+      const results = await analyzeProjectEligibility(project.description);
+      
+      const matches: FundMatch[] = results.map((r: any) => ({
+        fundId: r.fundId,
+        score: r.score,
+        rationale: r.rationale,
+        eligibilityStatus: r.eligibilityStatus
+      })).sort((a: FundMatch, b: FundMatch) => b.score - a.score);
+
+      onUpdateMatches(matches);
+      setAnalysisEmpty(matches.length === 0);
+      setAnalysisDone(true);
+    } catch (error) {
+      console.error("Analysis failed", error);
+      setAnalysisError(getErrorMessage(error));
+      setAnalysisDone(false);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const getScoreColor = (score: number) => {
@@ -70,13 +94,35 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
                 </button>
             )}
         </div>
+        {analysisError && (
+          <div className="mt-4 bg-red-500/10 border border-red-500/30 text-red-100 px-4 py-3 rounded-2xl text-sm">
+            {analysisError}
+          </div>
+        )}
       </div>
 
+      {isAnalyzing && (
+        <div className="space-y-3">
+          {[1,2].map(i => (
+            <div key={i} className="bg-glass-dark rounded-3xl border border-white/5 p-6 animate-pulse">
+              <div className="h-4 w-24 bg-white/10 rounded-full mb-3" />
+              <div className="h-3 w-full bg-white/5 rounded-full mb-2" />
+              <div className="h-3 w-3/4 bg-white/5 rounded-full" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Results */}
-      {analysisDone && project.matchedFunds && (
+      {analysisDone && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
            <h3 className="text-xl font-bold text-white pl-2">{t('fundMatcher.recommendedFunds')}</h3>
-           <div className="grid grid-cols-1 gap-6">
+           {analysisEmpty ? (
+            <div className="bg-white/5 border border-white/10 text-text-secondary px-4 py-6 rounded-2xl text-sm">
+              {t('fundMatcher.noResults')}
+            </div>
+           ) : (
+            <div className="grid grid-cols-1 gap-6">
               {project.matchedFunds.map((match) => {
                   const fund = FUNDS.find(f => f.id === match.fundId);
                   if (!fund) return null;
@@ -133,6 +179,7 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
                   );
               })}
            </div>
+           )}
         </div>
       )}
     </div>

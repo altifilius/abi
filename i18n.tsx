@@ -10,6 +10,9 @@ type I18nContextValue = {
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
+    'common.genericError': 'Something went wrong. Please try again.',
+    'common.missingApiKey': 'Gemini API key is missing. Add it to `.env.local` as GEMINI_API_KEY=...',
+
     'layout.workspace': 'Project Workspace',
     'layout.language': 'Language',
     'layout.collapse': 'Collapse',
@@ -90,14 +93,21 @@ const translations: Record<Language, Record<string, string>> = {
     'fundMatcher.startApplication': 'Start Application',
     'fundMatcher.topMatch': 'Top Match',
     'fundMatcher.fitScore': 'Fit Score',
+    'fundMatcher.noResults': 'No matches returned yet. Try expanding your project details or re-running.',
+    'fundMatcher.error.generic': 'Analysis failed. Please try again.',
+    'fundMatcher.error.noDescription': 'Add a project description in the AI Coach before running analysis.',
 
     'ideaAgent.welcome': 'Hello! I am Abi, your AI Grant Consultant. Tell me about your project idea. What innovation are you planning to develop?',
     'ideaAgent.headerTitle': 'Abi - Project Coach',
     'ideaAgent.headerSubtitle': 'AI-assisted brainstorming',
     'ideaAgent.summaryIntro': 'Here is a draft summary of your project based on our chat:',
     'ideaAgent.generateOnePager': 'Generate Project 1-Pager',
+    'ideaAgent.generatingSummary': 'Generating summary...',
     'ideaAgent.placeholder': 'Describe your innovation...',
     'ideaAgent.isThinking': 'Abi is thinking...',
+    'ideaAgent.error.emptyMessage': 'Please enter a message before sending.',
+    'ideaAgent.error.noSession': 'Chat is not ready yet. Check your API key and try again.',
+    'ideaAgent.error.needConversation': 'Share a bit more about your project before generating the 1-pager.',
 
     'incorporation.roadmapTitle': 'Establishment Roadmap',
     'incorporation.country': 'Turkey (A.Ş. / Ltd.)',
@@ -144,6 +154,9 @@ const translations: Record<Language, Record<string, string>> = {
     'help.support': 'Need more help? Reach your AI coach in the AI Coach tab.',
   },
   tr: {
+    'common.genericError': 'Bir sorun oluştu, lütfen tekrar deneyin.',
+    'common.missingApiKey': 'Gemini API anahtarı eksik. `.env.local` dosyasına GEMINI_API_KEY=... olarak ekleyin.',
+
     'layout.workspace': 'Proje Çalışma Alanı',
     'layout.language': 'Dil',
     'layout.collapse': 'Daralt',
@@ -224,14 +237,21 @@ const translations: Record<Language, Record<string, string>> = {
     'fundMatcher.startApplication': 'Başvuruyu Başlat',
     'fundMatcher.topMatch': 'En Uygun',
     'fundMatcher.fitScore': 'Uyum Skoru',
+    'fundMatcher.noResults': 'Henüz eşleşme bulunamadı. Proje detaylarını genişletip tekrar deneyin.',
+    'fundMatcher.error.generic': 'Analiz başarısız oldu. Lütfen tekrar deneyin.',
+    'fundMatcher.error.noDescription': 'Analizden önce Yapay Zeka Koçu ile proje açıklaması ekleyin.',
 
     'ideaAgent.welcome': 'Merhaba! Ben Abi, hibe danışmanınız. Proje fikrinizden bahsedin. Hangi yeniliği geliştirmeyi planlıyorsunuz?',
     'ideaAgent.headerTitle': 'Abi - Proje Koçu',
     'ideaAgent.headerSubtitle': 'Yapay zekalı beyin fırtınası',
     'ideaAgent.summaryIntro': 'Sohbetimize göre hazırlanan taslak özet:',
     'ideaAgent.generateOnePager': 'Projeyi 1 Sayfada Yaz',
+    'ideaAgent.generatingSummary': 'Özet hazırlanıyor...',
     'ideaAgent.placeholder': 'Yeniliğinizi anlatın...',
     'ideaAgent.isThinking': 'Abi düşünüyor...',
+    'ideaAgent.error.emptyMessage': 'Göndermeden önce bir mesaj yazın.',
+    'ideaAgent.error.noSession': 'Sohbet henüz hazır değil. API anahtarınızı kontrol edin.',
+    'ideaAgent.error.needConversation': '1 sayfalık özet için projeyi biraz daha anlatın.',
 
     'incorporation.roadmapTitle': 'Kuruluş Yol Haritası',
     'incorporation.country': 'Türkiye (A.Ş. / Ltd.)',

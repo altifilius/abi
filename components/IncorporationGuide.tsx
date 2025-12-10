@@ -9,7 +9,7 @@ const IncorporationGuide: React.FC = () => {
   const { t } = useI18n();
 
   const toggleStep = (id: string) => {
-    setSteps(steps.map(s => 
+    setSteps(steps.map(s =>
       s.id === id ? { ...s, completed: !s.completed } : s
     ));
   };
@@ -42,19 +42,19 @@ const IncorporationGuide: React.FC = () => {
 
             {/* Progress Bar */}
             <div className="w-full h-2 bg-white/5 rounded-full mb-10 overflow-hidden border border-white/5">
-                <div 
-                    className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-700 ease-out shadow-glow-primary" 
+                <div
+                    className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-700 ease-out shadow-glow-primary"
                     style={{ width: `${progress}%` }}
                 />
             </div>
 
             <div className="space-y-4">
                 {steps.map((step, index) => (
-                    <div 
-                        key={step.id} 
+                    <div
+                        key={step.id}
                         className={`group relative flex gap-4 p-5 rounded-2xl border transition-all duration-300 ${
-                            step.completed 
-                                ? 'bg-white/5 border-transparent opacity-60' 
+                            step.completed
+                                ? 'bg-white/5 border-transparent opacity-60'
                                 : 'bg-glass-dark border-white/10 hover:border-primary/30 hover:shadow-glass hover:bg-white/5'
                         }`}
                     >
@@ -63,11 +63,11 @@ const IncorporationGuide: React.FC = () => {
                              <div className="absolute left-[29px] top-14 bottom-[-18px] w-0.5 bg-white/10 group-hover:bg-primary/20 transition-colors" />
                         )}
 
-                        <button 
+                        <button
                             onClick={() => toggleStep(step.id)}
                             className={`flex-shrink-0 w-6 h-6 rounded-lg border flex items-center justify-center transition-all z-10 ${
-                                step.completed 
-                                    ? 'bg-primary border-primary text-background shadow-glow-primary' 
+                                step.completed
+                                    ? 'bg-primary border-primary text-background shadow-glow-primary'
                                     : 'border-white/30 text-transparent hover:border-primary bg-background'
                             }`}
                         >
@@ -102,7 +102,7 @@ const IncorporationGuide: React.FC = () => {
                 <Calendar size={20} className="text-secondary" />
                 {t('incorporation.upcomingDeadlines')}
             </h4>
-            
+
             <div className="space-y-4">
                 <div className="flex gap-4 items-start p-3 bg-white/5 rounded-2xl border border-white/5">
                     <div className="w-12 text-center bg-background rounded-xl py-2 border border-white/10 shadow-inner">

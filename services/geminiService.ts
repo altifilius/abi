@@ -1,12 +1,32 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Fund, Project } from "../types";
 import { FUNDS } from "../constants";
 
 // Ideally, this is injected securely. For this prototype, we assume process.env.API_KEY is available.
 // In a real frontend-only demo, the user might need to input this, but per instructions we assume env var.
-const apiKey = process.env.API_KEY || ''; 
+const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
 
-const ai = new GoogleGenAI({ apiKey });
+let ai: GoogleGenAI | null = null;
+
+export class MissingApiKeyError extends Error {
+  constructor() {
+    super('Gemini API key is missing.');
+    this.name = 'MissingApiKeyError';
+  }
+}
+
+export const isMissingApiKeyError = (error: unknown) => {
+  return error instanceof Error && error.name === 'MissingApiKeyError';
+};
+
+const getClient = () => {
+  if (!apiKey) {
+    throw new MissingApiKeyError();
+  }
+  if (!ai) {
+    ai = new GoogleGenAI({ apiKey });
+  }
+  return ai;
+};
 
 const MODEL_CHAT = 'gemini-2.5-flash';
 const MODEL_REASONING = 'gemini-2.5-flash'; 
@@ -23,12 +43,13 @@ Keep answers concise. Once you have enough info, suggest generating a Project Su
 `;
 
 export const createChatSession = () => {
-  return ai.chats.create({
-    model: MODEL_CHAT,
-    config: {
-      systemInstruction: AGENT_SYSTEM_INSTRUCTION,
-    },
-  });
+  const client = getClient();
+  return client.chats.create({
+      model: MODEL_CHAT,
+      config: {
+        systemInstruction: AGENT_SYSTEM_INSTRUCTION,
+      },
+    });
 };
 
 export const analyzeProjectEligibility = async (projectDescription: string): Promise<any> => {
@@ -72,7 +93,8 @@ export const analyzeProjectEligibility = async (projectDescription: string): Pro
   };
 
   try {
-    const response = await ai.models.generateContent({
+    const client = getClient();
+    const response = await client.models.generateContent({
       model: MODEL_REASONING,
       contents: prompt,
       config: {
@@ -85,7 +107,7 @@ export const analyzeProjectEligibility = async (projectDescription: string): Pro
     return JSON.parse(response.text || '[]');
   } catch (error) {
     console.error("Analysis failed:", error);
-    return [];
+    throw error;
   }
 };
 
@@ -103,12 +125,14 @@ export const generateDraftOnePager = async (chatHistory: string): Promise<string
     `;
 
     try {
-      const response = await ai.models.generateContent({
+      const client = getClient();
+      const response = await client.models.generateContent({
         model: MODEL_CHAT,
         contents: prompt,
       });
       return response.text || "Could not generate summary.";
     } catch (e) {
-      return "Error generating summary.";
+      console.error("Summary generation failed:", e);
+      throw e;
     }
 }
