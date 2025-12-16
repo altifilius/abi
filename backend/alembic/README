@@ -1,0 +1,1 @@
+Alembic migrations live here. Use `alembic -c backend/alembic.ini upgrade head` (or `make migrate`).

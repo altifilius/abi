@@ -122,7 +122,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Ingest a PDF report into the database.")
     parser.add_argument("pdf_path", type=Path, help="Path to PDF report")
-    parser.add_argument("--report-id", type=str, default="default_report", help="Identifier for this report")
+    parser.add_argument("--report-id", type=str, default=None, help="Identifier for this report")
     args = parser.parse_args()
 
-    asyncio.run(ingest(args.pdf_path, args.report_id))
+    from .settings import settings
+
+    asyncio.run(ingest(args.pdf_path, args.report_id or settings.default_report_id))

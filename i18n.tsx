@@ -11,7 +11,7 @@ type I18nContextValue = {
 const translations: Record<Language, Record<string, string>> = {
   en: {
     'common.genericError': 'Something went wrong. Please try again.',
-    'common.missingApiKey': 'Gemini API key is missing. Add it to `.env.local` as GEMINI_API_KEY=...',
+    'common.missingApiKey': 'OpenAI API key is missing on the server. Set OPENAI_API_KEY in backend/.env.',
 
     'layout.workspace': 'Project Workspace',
     'layout.language': 'Language',
@@ -146,7 +146,7 @@ const translations: Record<Language, Record<string, string>> = {
     'help.subtitle': 'Quick ways to get unblocked.',
     'help.quickstart': 'Quickstart',
     'help.step.install': 'Install dependencies with `npm install`.',
-    'help.step.env': 'Add your Gemini key in `.env.local` as `GEMINI_API_KEY=...`.',
+    'help.step.env': 'Add your OpenAI key to backend/.env as `OPENAI_API_KEY=...`.',
     'help.step.dev': 'Run the app locally with `npm run dev`.',
     'help.docs': 'Documentation',
     'help.link.rules': 'Read the RULES.md for project conventions.',
@@ -155,7 +155,7 @@ const translations: Record<Language, Record<string, string>> = {
   },
   tr: {
     'common.genericError': 'Bir sorun oluştu, lütfen tekrar deneyin.',
-    'common.missingApiKey': 'Gemini API anahtarı eksik. `.env.local` dosyasına GEMINI_API_KEY=... olarak ekleyin.',
+    'common.missingApiKey': 'OpenAI API anahtarı sunucuda eksik. `backend/.env` dosyasına OPENAI_API_KEY=... olarak ekleyin.',
 
     'layout.workspace': 'Proje Çalışma Alanı',
     'layout.language': 'Dil',
@@ -290,7 +290,7 @@ const translations: Record<Language, Record<string, string>> = {
     'help.subtitle': 'Hızlıca ilerlemek için.',
     'help.quickstart': 'Hızlı Başlangıç',
     'help.step.install': '`npm install` ile bağımlılıkları yükleyin.',
-    'help.step.env': '`.env.local` dosyasına `GEMINI_API_KEY=...` ekleyin.',
+    'help.step.env': '`backend/.env` dosyasına `OPENAI_API_KEY=...` ekleyin.',
     'help.step.dev': '`npm run dev` ile uygulamayı çalıştırın.',
     'help.docs': 'Dokümantasyon',
     'help.link.rules': 'Proje kuralları için RULES.md dosyasını okuyun.',

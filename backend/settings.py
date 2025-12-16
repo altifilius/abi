@@ -1,5 +1,6 @@
 from functools import lru_cache
-from pydantic import BaseSettings, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -12,6 +13,9 @@ class Settings(BaseSettings):
     openai_base_url: str | None = Field(default=None, env="OPENAI_BASE_URL")
     openai_embedding_model: str = Field(default="text-embedding-3-large", env="OPENAI_EMBEDDING_MODEL")
     openai_chat_model: str = Field(default="gpt-oss-120b", env="OPENAI_CHAT_MODEL")
+    openai_idea_model: str = Field(default="gpt-4.1", env="OPENAI_IDEA_MODEL")
+    openai_fund_model: str = Field(default="gpt-4.1-mini", env="OPENAI_FUND_MODEL")
+    default_report_id: str = Field(default="default_report", env="DEFAULT_REPORT_ID")
 
     embed_batch_size: int = Field(default=64, env="EMBED_BATCH_SIZE")
     embed_max_retries: int = Field(default=3, env="EMBED_MAX_RETRIES")

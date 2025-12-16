@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Target, AlertCircle, ArrowRight, Loader2, Sparkles, Award } from 'lucide-react';
 import { Project, FundMatch } from '../types';
 import { FUNDS } from '../constants';
-import { analyzeProjectEligibility, isMissingApiKeyError } from '../services/geminiService';
+import { runFundMatcher } from '../services/api';
 import { useI18n } from '../i18n';
 
 interface FundMatcherProps {
@@ -18,7 +18,6 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
   const { t } = useI18n();
 
   const getErrorMessage = (error: unknown) => {
-    if (isMissingApiKeyError(error)) return t('common.missingApiKey');
     if (error instanceof Error && error.message) return error.message;
     return t('fundMatcher.error.generic');
   };
@@ -34,14 +33,16 @@ const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) =
     setAnalysisDone(false);
     setIsAnalyzing(true);
     try {
-      const results = await analyzeProjectEligibility(project.description);
+      const results = await runFundMatcher(project.description);
       
-      const matches: FundMatch[] = results.map((r: any) => ({
-        fundId: r.fundId,
-        score: r.score,
-        rationale: r.rationale,
-        eligibilityStatus: r.eligibilityStatus
-      })).sort((a: FundMatch, b: FundMatch) => b.score - a.score);
+      const matches: FundMatch[] = (results || [])
+        .map((r: FundMatch) => ({
+          fundId: r.fundId,
+          score: Number(r.score),
+          rationale: r.rationale,
+          eligibilityStatus: r.eligibilityStatus
+        }))
+        .sort((a: FundMatch, b: FundMatch) => b.score - a.score);
 
       onUpdateMatches(matches);
       setAnalysisEmpty(matches.length === 0);

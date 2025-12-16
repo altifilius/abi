@@ -26,6 +26,7 @@ class DimensionReport(BaseModel):
     diagnosis: Optional[str] = None
     recommended_actions: List[str] = []
     risks: List[str] = []
+    notes: Optional[str] = None
 
 
 class AnalyzeIdeaResponse(BaseModel):
@@ -33,3 +34,32 @@ class AnalyzeIdeaResponse(BaseModel):
     summary: str
     next_steps: List[str]
     dimension_reports: List[DimensionReport]
+
+
+class IdeaChatMessage(BaseModel):
+    role: str
+    text: str
+
+
+class IdeaChatRequest(BaseModel):
+    messages: List[IdeaChatMessage]
+    mode: str = Field(default="chat", description="chat | summary")
+
+
+class IdeaChatResponse(BaseModel):
+    reply: str
+
+
+class FundMatcherRequest(BaseModel):
+    description: str = Field(..., description="Project 1-pager or summary text")
+
+
+class FundMatchResult(BaseModel):
+    fundId: str
+    score: int
+    rationale: str
+    eligibilityStatus: str
+
+
+class FundMatcherResponse(BaseModel):
+    matches: List[FundMatchResult]
