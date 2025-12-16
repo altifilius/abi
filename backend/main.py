@@ -6,6 +6,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from openai import OpenAIError
 
@@ -38,8 +39,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup():
-    # Ensure extension/tables exist (in production prefer Alembic).
-    await init_db()
+    # Ensure extension/tables exist (in production prefer Alembic). Non-fatal if DB is unavailable,
+    # so chat/matcher endpoints can still run without Postgres.
+    try:
+        await init_db()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("DB init skipped (continuing without DB): %s", exc)
 
 
 @app.post("/analyze-idea", response_model=AnalyzeIdeaResponse)
@@ -68,9 +74,21 @@ async def idea_chat(payload: IdeaChatRequest):
     if not payload.messages:
         raise HTTPException(status_code=400, detail="messages are required")
     try:
+        # Streaming mode
+        if payload.stream:
+            iterator = await run_idea_chat_stream(
+                [m.model_dump() for m in payload.messages],
+                mode=payload.mode,
+                language=payload.language,
+                project_context=payload.project_context,
+            )
+            return StreamingResponse(iterator, media_type="text/plain")
+
         reply = await run_idea_chat(
             [m.model_dump() for m in payload.messages],
             mode=payload.mode,
+            language=payload.language,
+            project_context=payload.project_context,
         )
         return {"reply": reply}
     except OpenAIError as e:

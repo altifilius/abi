@@ -44,6 +44,9 @@ class IdeaChatMessage(BaseModel):
 class IdeaChatRequest(BaseModel):
     messages: List[IdeaChatMessage]
     mode: str = Field(default="chat", description="chat | summary")
+    language: str | None = Field(default=None, description="en | tr")
+    project_context: str | None = Field(default=None, description="Optional project/title context")
+    stream: bool = Field(default=False, description="Enable streaming response")
 
 
 class IdeaChatResponse(BaseModel):

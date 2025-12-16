@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Sparkles, FileText, Cpu } from 'lucide-react';
-import { sendIdeaChat, generateIdeaSummary } from '../services/api';
+import { Send, User, Sparkles, FileText, Cpu, RotateCcw } from 'lucide-react';
+import { sendIdeaChat, generateIdeaSummary, streamIdeaChat } from '../services/api';
 import { ChatMessage } from '../types';
 import { ABI_AVATAR_URL } from '../constants';
 import { useI18n } from '../i18n';
 
 interface IdeaAgentProps {
   onProjectCreate: (desc: string) => void;
+  projectTitle?: string;
+  projectDescription?: string;
 }
 
-const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
-  const { t } = useI18n();
+const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate, projectTitle, projectDescription }) => {
+  const { t, language } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -23,6 +25,7 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [lastPayload, setLastPayload] = useState<ChatMessage[] | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,6 +35,51 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
   const getErrorMessage = (error: unknown) => {
     if (error instanceof Error && error.message) return error.message;
     return t('common.genericError');
+  };
+
+  const projectContext = [projectTitle, projectDescription].filter(Boolean).join(' - ') || undefined;
+
+  const updateMessageText = (id: string, text: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, text } : m));
+  };
+
+  const removeMessageById = (id: string) => {
+    setMessages(prev => prev.filter(m => m.id !== id));
+  };
+
+  const appendModelPlaceholder = (id: string) => {
+    setMessages(prev => [
+      ...prev,
+      {
+        id,
+        role: 'model',
+        text: '',
+        timestamp: Date.now()
+      }
+    ]);
+  };
+
+  const runChatWithHistory = async (history: ChatMessage[]) => {
+    const placeholderId = `model-${Date.now()}`;
+    appendModelPlaceholder(placeholderId);
+    try {
+      // Try streaming first
+      await streamIdeaChat(
+        history,
+        { language, projectContext },
+        (partial) => updateMessageText(placeholderId, partial)
+      );
+    } catch (streamErr) {
+      console.warn("Streaming not available, falling back", streamErr);
+      // Fallback to non-streaming
+      try {
+        const responseText = await sendIdeaChat(history, { language, projectContext });
+        updateMessageText(placeholderId, responseText);
+      } catch (error) {
+        removeMessageById(placeholderId);
+        throw error;
+      }
+    }
   };
 
   const handleSend = async () => {
@@ -50,19 +98,13 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
     const history = [...messages, userMsg];
 
     setMessages(prev => [...prev, userMsg]);
+    setLastPayload(history);
     setInputText('');
     setIsTyping(true);
     setActionError(null);
 
     try {
-      const responseText = await sendIdeaChat(history);
-      const modelMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        text: responseText,
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, modelMsg]);
+      await runChatWithHistory(history);
     } catch (error) {
       console.error("Chat Error", error);
       setActionError(getErrorMessage(error));
@@ -83,7 +125,7 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
     setIsGeneratingSummary(true);
 
     try {
-      const summary = await generateIdeaSummary(messages);
+      const summary = await generateIdeaSummary(messages, { language, projectContext });
       
       const summaryMsg: ChatMessage = {
           id: 'summary',
@@ -165,8 +207,26 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate }) => {
             </div>
         )}
         {actionError && (
-          <div className="mb-3 text-sm text-red-200 bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-2xl">
-            {actionError}
+          <div className="mb-3 text-sm text-red-200 bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-2xl flex items-center justify-between gap-3">
+            <span>{actionError}</span>
+            {lastPayload && (
+              <button
+                onClick={async () => {
+                  setActionError(null);
+                  setIsTyping(true);
+                  try {
+                    await runChatWithHistory(lastPayload);
+                  } catch (err) {
+                    setActionError(getErrorMessage(err));
+                  } finally {
+                    setIsTyping(false);
+                  }
+                }}
+                className="flex items-center gap-2 text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-full border border-white/20"
+              >
+                <RotateCcw size={14} /> Try again
+              </button>
+            )}
           </div>
         )}
         <div className="relative flex items-center gap-3">

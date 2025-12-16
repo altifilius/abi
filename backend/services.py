@@ -313,13 +313,30 @@ def build_chat_messages(history: list[dict], system_prompt: str) -> list[dict]:
     return msgs
 
 
-async def run_idea_chat(history: list[dict], mode: str = "chat") -> str:
+def _language_directive(language: str | None) -> str:
+    if language == "tr":
+        return "Respond in Turkish."
+    return "Respond in English."
+
+
+async def run_idea_chat(
+    history: list[dict],
+    mode: str = "chat",
+    language: str | None = None,
+    project_context: str | None = None,
+) -> str:
     base_prompt = (
         "You are an expert Grant Consultant for Turkish SMEs and Startups (TUBITAK, KOSGEB). "
         "Keep responses concise, actionable, and focus on clarifying the project. "
-        "Ask clarifying questions about technical innovation, method, and commercial potential when helpful."
+        "Ask clarifying questions about technical innovation, method, and commercial potential when helpful. "
+        f"{_language_directive(language)}"
     )
-    messages = build_chat_messages(history, base_prompt)
+    context_prompt = (
+        f"Project context: {project_context}"
+        if project_context
+        else "Project context: not provided."
+    )
+    messages = build_chat_messages(history, f"{base_prompt} {context_prompt}")
 
     if mode == "summary":
         messages.append(
@@ -335,6 +352,65 @@ async def run_idea_chat(history: list[dict], mode: str = "chat") -> str:
 
     reply = await call_llm(messages, model=settings.openai_idea_model)
     return reply if isinstance(reply, str) else ""
+
+
+async def run_idea_chat_stream(
+    history: list[dict],
+    mode: str = "chat",
+    language: str | None = None,
+    project_context: str | None = None,
+):
+    base_prompt = (
+        "You are an expert Grant Consultant for Turkish SMEs and Startups (TUBITAK, KOSGEB). "
+        "Keep responses concise, actionable, and focus on clarifying the project. "
+        "Ask clarifying questions about technical innovation, method, and commercial potential when helpful. "
+        f"{_language_directive(language)}"
+    )
+    context_prompt = (
+        f"Project context: {project_context}"
+        if project_context
+        else "Project context: not provided."
+    )
+    messages = build_chat_messages(history, f"{base_prompt} {context_prompt}")
+
+    if mode == "summary":
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Generate a professional 'Project 1-Pager' suitable for a TUBITAK/KOSGEB application. "
+                    "Structure as: 1) Project Title, 2) Problem & Solution, 3) Innovative Aspect, 4) Methodology. "
+                    "Keep it concise and grounded only in the conversation."
+                ),
+            }
+        )
+
+    try:
+        stream = await client.chat.completions.create(
+            model=settings.openai_idea_model,
+            messages=messages,
+            stream=True,
+        )
+    except OpenAIError:
+        raise
+    except Exception as e:
+        logger.error("Failed to start streaming chat: %s", str(e))
+        raise
+
+    async def iterator():
+        try:
+            async for chunk in stream:
+                part = ""
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    part = getattr(delta, "content", None) or ""
+                if part:
+                    yield part
+        except Exception as e:
+            logger.error("Streaming chat failed: %s", str(e))
+            return
+
+    return iterator()
 
 
 # --- Fund matcher ---

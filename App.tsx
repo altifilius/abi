@@ -97,7 +97,13 @@ const App: React.FC = () => {
       case 'dashboard':
         return <Dashboard project={project} onNavigate={setActiveTab} />;
       case 'idea-agent':
-        return <IdeaAgent onProjectCreate={handleProjectUpdate} />;
+        return (
+          <IdeaAgent
+            onProjectCreate={handleProjectUpdate}
+            projectTitle={project.title}
+            projectDescription={project.description}
+          />
+        );
       case 'fund-matcher':
         return <FundMatcher project={project} onUpdateMatches={handleMatchesUpdate} />;
       case 'documents':
