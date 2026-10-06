@@ -80,6 +80,12 @@ RELOAD=false make dev-backend
 FastAPI serves `dist/` when a frontend build exists. Keep frontend API requests
 same-origin in deployments.
 
+## API
+
+- `POST /api/idea-chat` — AI Coach chat and project-summary generation.
+- `POST /api/fund-matcher` — structured grant matching.
+- `POST /analyze-idea` — optional PostgreSQL/pgvector-grounded analysis.
+
 ## Report ingestion
 
 PDFs are local inputs and are intentionally not committed:

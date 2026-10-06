@@ -149,8 +149,7 @@ const translations: Record<Language, Record<string, string>> = {
     'help.step.env': 'Add your OpenAI key to backend/.env as `OPENAI_API_KEY=...`.',
     'help.step.dev': 'Run the frontend locally with `bun run dev`.',
     'help.docs': 'Documentation',
-    'help.link.rules': 'Read the RULES.md for project conventions.',
-    'help.link.readme': 'Review README.md for features and scripts.',
+    'help.link.readme': 'Use README.md for setup, API, security, and verification.',
     'help.support': 'Need more help? Reach your AI coach in the AI Coach tab.',
   },
   tr: {
@@ -293,8 +292,7 @@ const translations: Record<Language, Record<string, string>> = {
     'help.step.env': '`backend/.env` dosyasına `OPENAI_API_KEY=...` ekleyin.',
     'help.step.dev': 'Ön yüzü yerelde `bun run dev` ile çalıştırın.',
     'help.docs': 'Dokümantasyon',
-    'help.link.rules': 'Proje kuralları için RULES.md dosyasını okuyun.',
-    'help.link.readme': 'Özellikler ve scriptler için README.md’ye bakın.',
+    'help.link.readme': 'Kurulum, API, güvenlik ve doğrulama için README.md’ye bakın.',
     'help.support': 'Daha fazla destek için AI Coach sekmesinden koça ulaşın.',
   },
 };

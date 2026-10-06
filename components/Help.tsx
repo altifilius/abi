@@ -33,7 +33,6 @@ const Help: React.FC = () => {
             <h2 className="text-lg font-semibold text-white">{t('help.docs')}</h2>
           </div>
           <ul className="space-y-2 text-sm text-text-primary">
-            <li>- {t('help.link.rules')}</li>
             <li>- {t('help.link.readme')}</li>
           </ul>
         </section>
