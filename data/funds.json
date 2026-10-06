@@ -1,0 +1,38 @@
+[
+  {
+    "id": "tubitak-1501",
+    "code": "1501",
+    "name": "Industrial R&D Projects Grant Programme",
+    "institution": "TUBITAK",
+    "description": "Supports R&D projects of SMEs and large companies. No budget limit.",
+    "maxBudget": "Unlimited",
+    "supportRate": "75% (SME), 60% (Large)"
+  },
+  {
+    "id": "tubitak-1507",
+    "code": "1507",
+    "name": "SME R&D Start-up Support Programme",
+    "institution": "TUBITAK",
+    "description": "For SMEs submitting their first few R&D projects. Max 3 projects.",
+    "maxBudget": "1.200.000 TL",
+    "supportRate": "75%"
+  },
+  {
+    "id": "kosgeb-arge",
+    "code": "AR-GE",
+    "name": "KOSGEB R&D, P&D and Innovation Support",
+    "institution": "KOSGEB",
+    "description": "Supports new product development and innovation for SMEs.",
+    "maxBudget": "1.100.000 TL",
+    "supportRate": "75%"
+  },
+  {
+    "id": "tubitak-1512",
+    "code": "1512",
+    "name": "Bigg - Entrepreneurship Support Programme",
+    "institution": "TUBITAK",
+    "description": "Grant for individual entrepreneurs to turn their idea into a startup.",
+    "maxBudget": "900.000 TL (Equity-free)",
+    "supportRate": "100%"
+  }
+]

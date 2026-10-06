@@ -1,5 +1,5 @@
-import React from 'react';
 import { Bell, Palette } from 'lucide-react';
+import type React from 'react';
 import { useI18n } from '../i18n';
 
 const Settings: React.FC = () => {

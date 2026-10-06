@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Sparkles, FileText, Cpu, RotateCcw } from 'lucide-react';
-import { sendIdeaChat, generateIdeaSummary, streamIdeaChat } from '../services/api';
-import { ChatMessage } from '../types';
+import { Cpu, FileText, RotateCcw, Send, Sparkles, User } from 'lucide-react';
+import type React from 'react';
 import { ABI_AVATAR_URL } from '../constants';
+import { useIdeaChat } from '../hooks/useIdeaChat';
 import { useI18n } from '../i18n';
 
 interface IdeaAgentProps {
@@ -11,149 +10,48 @@ interface IdeaAgentProps {
   projectDescription?: string;
 }
 
-const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate, projectTitle, projectDescription }) => {
+const IdeaAgent: React.FC<IdeaAgentProps> = ({
+  onProjectCreate,
+  projectTitle,
+  projectDescription,
+}) => {
   const { t, language } = useI18n();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      text: t('ideaAgent.welcome'),
-      timestamp: Date.now()
-    }
-  ]);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [lastPayload, setLastPayload] = useState<ChatMessage[] | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const getErrorMessage = (error: unknown) => {
-    if (error instanceof Error && error.message) return error.message;
-    return t('common.genericError');
-  };
-
-  const projectContext = [projectTitle, projectDescription].filter(Boolean).join(' - ') || undefined;
-
-  const updateMessageText = (id: string, text: string) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, text } : m));
-  };
-
-  const removeMessageById = (id: string) => {
-    setMessages(prev => prev.filter(m => m.id !== id));
-  };
-
-  const appendModelPlaceholder = (id: string) => {
-    setMessages(prev => [
-      ...prev,
-      {
-        id,
-        role: 'model',
-        text: '',
-        timestamp: Date.now()
-      }
-    ]);
-  };
-
-  const runChatWithHistory = async (history: ChatMessage[]) => {
-    const placeholderId = `model-${Date.now()}`;
-    appendModelPlaceholder(placeholderId);
-    try {
-      // Try streaming first
-      await streamIdeaChat(
-        history,
-        { language, projectContext },
-        (partial) => updateMessageText(placeholderId, partial)
-      );
-    } catch (streamErr) {
-      console.warn("Streaming not available, falling back", streamErr);
-      // Fallback to non-streaming
-      try {
-        const responseText = await sendIdeaChat(history, { language, projectContext });
-        updateMessageText(placeholderId, responseText);
-      } catch (error) {
-        removeMessageById(placeholderId);
-        throw error;
-      }
-    }
-  };
-
-  const handleSend = async () => {
-    if (!inputText.trim()) {
-      setActionError(t('ideaAgent.error.emptyMessage'));
-      return;
-    }
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: inputText,
-      timestamp: Date.now()
-    };
-
-    const history = [...messages, userMsg];
-
-    setMessages(prev => [...prev, userMsg]);
-    setLastPayload(history);
-    setInputText('');
-    setIsTyping(true);
-    setActionError(null);
-
-    try {
-      await runChatWithHistory(history);
-    } catch (error) {
-      console.error("Chat Error", error);
-      setActionError(getErrorMessage(error));
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  const handleGenerateSummary = async () => {
-    if (isGeneratingSummary) return;
-    if (messages.length <= 1) {
-      setActionError(t('ideaAgent.error.needConversation'));
-      return;
-    }
-
-    setActionError(null);
-    setIsTyping(true);
-    setIsGeneratingSummary(true);
-
-    try {
-      const summary = await generateIdeaSummary(messages, { language, projectContext });
-      
-      const summaryMsg: ChatMessage = {
-          id: 'summary',
-          role: 'model',
-          text: `${t('ideaAgent.summaryIntro')}\n\n${summary}`,
-          timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, summaryMsg]);
-      onProjectCreate(summary);
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-    } finally {
-      setIsTyping(false);
-      setIsGeneratingSummary(false);
-    }
-  };
+  const {
+    messages,
+    inputText,
+    setInputText,
+    isTyping,
+    isGeneratingSummary,
+    actionError,
+    setActionError,
+    lastPayload,
+    chatEndRef,
+    handleSend,
+    handleRetry,
+    handleGenerateSummary,
+  } = useIdeaChat({
+    welcomeMessage: t('ideaAgent.welcome'),
+    genericErrorMessage: t('common.genericError'),
+    emptyMessageError: t('ideaAgent.error.emptyMessage'),
+    needConversationError: t('ideaAgent.error.needConversation'),
+    summaryIntro: t('ideaAgent.summaryIntro'),
+    language,
+    projectTitle,
+    projectDescription,
+    onProjectCreate,
+  });
 
   return (
     <div className="flex flex-col h-full bg-glass-dark rounded-3xl shadow-glass border border-white/10 overflow-hidden backdrop-blur-xl">
       {/* Header */}
       <div className="p-4 border-b border-white/10 bg-white/5 flex items-center gap-3">
-           <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary shadow-glow-primary overflow-hidden">
-                <img src={ABI_AVATAR_URL} alt="Abi" className="w-full h-full object-cover" />
-           </div>
-           <div>
-               <h3 className="text-white font-semibold">{t('ideaAgent.headerTitle')}</h3>
-               <p className="text-xs text-text-secondary">{t('ideaAgent.headerSubtitle')}</p>
-           </div>
+        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary shadow-glow-primary overflow-hidden">
+          <img src={ABI_AVATAR_URL} alt="Abi" className="w-full h-full object-cover" />
+        </div>
+        <div>
+          <h3 className="text-white font-semibold">{t('ideaAgent.headerTitle')}</h3>
+          <p className="text-xs text-text-secondary">{t('ideaAgent.headerSubtitle')}</p>
+        </div>
       </div>
 
       {/* Chat Area */}
@@ -163,31 +61,35 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate, projectTitle, pr
             key={msg.id}
             className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
           >
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 border overflow-hidden ${
-              msg.role === 'model' 
-                ? 'bg-surface text-primary border-primary/30 shadow-glow-primary' 
-                : 'bg-secondary/20 text-secondary border-secondary/30'
-            }`}>
+            <div
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 border overflow-hidden ${
+                msg.role === 'model'
+                  ? 'bg-surface text-primary border-primary/30 shadow-glow-primary'
+                  : 'bg-secondary/20 text-secondary border-secondary/30'
+              }`}
+            >
               {msg.role === 'model' ? (
                 <img src={ABI_AVATAR_URL} alt="Abi" className="w-full h-full object-cover" />
               ) : (
                 <User size={20} />
               )}
             </div>
-            
-            <div className={`max-w-[80%] p-5 rounded-3xl text-sm leading-relaxed whitespace-pre-wrap backdrop-blur-md shadow-lg ${
-              msg.role === 'model' 
-                ? 'bg-white/5 border border-white/10 text-white rounded-tl-none' 
-                : 'bg-gradient-to-br from-primary/80 to-blue-600/80 text-white border border-white/20 rounded-tr-none'
-            }`}>
+
+            <div
+              className={`max-w-[80%] p-5 rounded-3xl text-sm leading-relaxed whitespace-pre-wrap backdrop-blur-md shadow-lg ${
+                msg.role === 'model'
+                  ? 'bg-white/5 border border-white/10 text-white rounded-tl-none'
+                  : 'bg-gradient-to-br from-primary/80 to-blue-600/80 text-white border border-white/20 rounded-tr-none'
+              }`}
+            >
               {msg.text}
             </div>
           </div>
         ))}
         {isTyping && (
-           <div className="flex items-center gap-2 text-primary text-xs ml-16 animate-pulse">
-             <Sparkles size={14} /> {t('ideaAgent.isThinking')}
-           </div>
+          <div className="flex items-center gap-2 text-primary text-xs ml-16 animate-pulse">
+            <Sparkles size={14} /> {t('ideaAgent.isThinking')}
+          </div>
         )}
         <div ref={chatEndRef} />
       </div>
@@ -195,33 +97,29 @@ const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate, projectTitle, pr
       {/* Input Area */}
       <div className="p-6 bg-glass-dark border-t border-white/10">
         {messages.length > 3 && (
-            <div className="mb-4 flex justify-center">
-                 <button 
-                  onClick={handleGenerateSummary}
-                  disabled={isTyping || isGeneratingSummary}
-                  className="flex items-center gap-2 bg-secondary/20 hover:bg-secondary/30 text-secondary px-6 py-2 rounded-full text-xs font-semibold transition-all border border-secondary/50 shadow-glow-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isGeneratingSummary ? <Cpu size={14} className="animate-spin" /> : <FileText size={14} />}
-                    {isGeneratingSummary ? t('ideaAgent.generatingSummary') : t('ideaAgent.generateOnePager')}
-                </button>
-            </div>
+          <div className="mb-4 flex justify-center">
+            <button
+              onClick={handleGenerateSummary}
+              disabled={isTyping || isGeneratingSummary}
+              className="flex items-center gap-2 bg-secondary/20 hover:bg-secondary/30 text-secondary px-6 py-2 rounded-full text-xs font-semibold transition-all border border-secondary/50 shadow-glow-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingSummary ? (
+                <Cpu size={14} className="animate-spin" />
+              ) : (
+                <FileText size={14} />
+              )}
+              {isGeneratingSummary
+                ? t('ideaAgent.generatingSummary')
+                : t('ideaAgent.generateOnePager')}
+            </button>
+          </div>
         )}
         {actionError && (
           <div className="mb-3 text-sm text-red-200 bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-2xl flex items-center justify-between gap-3">
             <span>{actionError}</span>
             {lastPayload && (
               <button
-                onClick={async () => {
-                  setActionError(null);
-                  setIsTyping(true);
-                  try {
-                    await runChatWithHistory(lastPayload);
-                  } catch (err) {
-                    setActionError(getErrorMessage(err));
-                  } finally {
-                    setIsTyping(false);
-                  }
-                }}
+                onClick={handleRetry}
                 className="flex items-center gap-2 text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-full border border-white/20"
               >
                 <RotateCcw size={14} /> Try again

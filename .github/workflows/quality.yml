@@ -1,0 +1,50 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Frontend quality checks
+        run: bun run check
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Backend lint
+        run: |
+          pip install ruff
+          ruff check backend
+
+      - name: Backend regression tests
+        env:
+          OPENAI_API_KEY: test-key
+        run: python -m unittest discover -s backend/tests -v
+
+      - name: Security audit
+        run: |
+          bun audit
+          pip install pip-audit bandit
+          pip-audit -r backend/requirements.txt
+          bandit -r backend -x backend/tests,backend/__pycache__,backend/alembic/__pycache__,backend/alembic/versions/__pycache__ -f screen

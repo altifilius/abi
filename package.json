@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck && bun run build",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "bun test",
+    "check": "bun run lint && bun run typecheck && bun run test && bun run build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -17,7 +20,9 @@
     "lucide-react": "^0.555.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/bun": "1.4.2",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.2.0",
     "tailwindcss": "^4.3.3",

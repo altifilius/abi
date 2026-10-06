@@ -1,5 +1,5 @@
-import React from 'react';
 import { BookOpen, LifeBuoy, Sparkles } from 'lucide-react';
+import type React from 'react';
 import { useI18n } from '../i18n';
 
 const Help: React.FC = () => {

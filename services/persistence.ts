@@ -1,4 +1,4 @@
-import type { ProjectPersistedState, ProjectDocument } from '../types';
+import type { ProjectDocument, ProjectPersistedState } from '../types';
 
 const STORAGE_KEY = 'abi.projectState';
 const CURRENT_VERSION = 1;

@@ -33,6 +33,21 @@ class DimensionReport(ApiModel):
     risks: list[str] = Field(default_factory=list)
     notes: str | None = None
 
+class PlaybookStageActions(ApiModel):
+    idea: list[str] = Field(default_factory=list)
+    mvp: list[str] = Field(default_factory=list)
+    scale: list[str] = Field(default_factory=list)
+
+
+class DimensionPlaybookData(ApiModel):
+    dimension: str
+    key_questions: list[str] = Field(default_factory=list)
+    common_mistakes: list[str] = Field(default_factory=list)
+    recommended_actions_by_stage: PlaybookStageActions = Field(
+        default_factory=PlaybookStageActions
+    )
+
+
 
 class AnalyzeIdeaResponse(ApiModel):
     idea_profile: IdeaProfile
@@ -71,3 +86,13 @@ class FundMatchResult(ApiModel):
 
 class FundMatcherResponse(ApiModel):
     matches: list[FundMatchResult]
+
+
+class FundCatalogItem(ApiModel):
+    id: str = Field(min_length=1, max_length=100)
+    code: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=200)
+    institution: Literal["TUBITAK", "KOSGEB", "EU"]
+    description: str = Field(min_length=1, max_length=2_000)
+    maxBudget: str = Field(min_length=1, max_length=100)
+    supportRate: str = Field(min_length=1, max_length=100)

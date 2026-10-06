@@ -97,9 +97,18 @@ make -C backend ingest PDF=/absolute/path/report.pdf REPORT_ID=demo-report
 
 ## Verification
 
+Run all verification gates:
+
 ```bash
-bun run check
-python -m unittest discover -s backend/tests
+make check
 uvx pip-audit -r backend/requirements.txt
 uvx bandit -r backend -x backend/tests
+```
+
+Individual checks:
+
+```bash
+bun run check     # Biome lint, TypeScript, Bun unit tests, production build
+make test         # Frontend unit tests and Python backend tests
+make lint         # Biome check and Ruff backend lint
 ```

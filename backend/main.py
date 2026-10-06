@@ -37,7 +37,7 @@ async def lifespan(_app: FastAPI):
     # Chat and matching can run without PostgreSQL; report analysis cannot.
     try:
         await init_db()
-    except Exception as exc:
+    except (OSError, RuntimeError) as exc:
         logger.warning("DB init skipped (continuing without DB): %s", exc)
     yield
 

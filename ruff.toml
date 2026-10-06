@@ -1,0 +1,25 @@
+target-version = "py311"
+line-length = 100
+
+[lint]
+select = [
+    "F",      # Pyflakes
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "BLE",    # flake8-blind-except
+    "RUF",    # Ruff-specific rules
+]
+
+ignore = [
+    "B008",   # FastAPI Depends() pattern
+    "E501",   # Line length handled by formatting
+]
+
+[lint.per-file-ignores]
+"backend/alembic/*" = ["E402"]
+
+[lint.isort]
+known-first-party = ["backend"]

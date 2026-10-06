@@ -2,7 +2,7 @@ export enum ProjectStage {
   IDEA = 'IDEA',
   DRAFTING = 'DRAFTING',
   READY = 'READY',
-  SUBMITTED = 'SUBMITTED'
+  SUBMITTED = 'SUBMITTED',
 }
 
 export interface Project {
@@ -39,8 +39,10 @@ export interface FundMatch {
   eligibilityStatus: 'eligible' | 'conditional' | 'ineligible';
 }
 
+export type IncorporationStepId = '1' | '2' | '3' | '4' | '5' | '6';
+
 export interface IncorporationStep {
-  id: string;
+  id: IncorporationStepId;
   title: string;
   description: string;
   completed: boolean;
