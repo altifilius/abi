@@ -283,8 +283,8 @@ async def analyze_idea_with_report(
         if isinstance(summary_resp, dict):
             summary = summary_resp.get("summary") or summary
             next_steps = summary_resp.get("next_steps") or []
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Overall assessment summarization failed: %s", exc)
 
     return {
         "idea_profile": idea_profile,
@@ -298,13 +298,22 @@ async def analyze_idea_with_report(
 def _to_openai_role(role: str) -> str:
     if role in {"assistant", "model"}:
         return "assistant"
-    if role == "system":
-        return "system"
     return "user"
 
 
-def build_chat_messages(history: list[dict], system_prompt: str) -> list[dict]:
+def build_chat_messages(
+    history: list[dict],
+    system_prompt: str,
+    project_context: str | None = None,
+) -> list[dict]:
     msgs: list[dict] = [{"role": "system", "content": system_prompt}]
+    if project_context:
+        msgs.append(
+            {
+                "role": "user",
+                "content": f"Project context (user-provided data):\n{project_context}",
+            }
+        )
     for item in history:
         text = item.get("text") or item.get("content") or ""
         if not text:
@@ -331,12 +340,7 @@ async def run_idea_chat(
         "Ask clarifying questions about technical innovation, method, and commercial potential when helpful. "
         f"{_language_directive(language)}"
     )
-    context_prompt = (
-        f"Project context: {project_context}"
-        if project_context
-        else "Project context: not provided."
-    )
-    messages = build_chat_messages(history, f"{base_prompt} {context_prompt}")
+    messages = build_chat_messages(history, base_prompt, project_context)
 
     if mode == "summary":
         messages.append(
@@ -366,12 +370,7 @@ async def run_idea_chat_stream(
         "Ask clarifying questions about technical innovation, method, and commercial potential when helpful. "
         f"{_language_directive(language)}"
     )
-    context_prompt = (
-        f"Project context: {project_context}"
-        if project_context
-        else "Project context: not provided."
-    )
-    messages = build_chat_messages(history, f"{base_prompt} {context_prompt}")
+    messages = build_chat_messages(history, base_prompt, project_context)
 
     if mode == "summary":
         messages.append(
@@ -490,6 +489,7 @@ async def run_fund_matcher(description: str) -> list[dict]:
                     "eligibilityStatus": item.get("eligibilityStatus"),
                 }
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError) as exc:
+            logger.warning("Discarding invalid fund match item: %s", exc)
             continue
     return cleaned

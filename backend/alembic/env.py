@@ -1,19 +1,18 @@
 import sys
-from pathlib import Path
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
-from sqlalchemy.engine import url as sa_url
 
 # Ensure project root on sys.path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from backend.settings import settings  # noqa: E402
+import backend.models  # noqa: E402,F401
 from backend.db import Base  # noqa: E402
-import backend.models  # noqa: F401,E402
+from backend.settings import settings  # noqa: E402
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

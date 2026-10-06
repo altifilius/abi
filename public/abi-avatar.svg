@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title description">
+  <title id="title">Abi</title>
+  <desc id="description">Abstract A monogram</desc>
+  <defs>
+    <linearGradient id="background" x1="20" y1="20" x2="140" y2="140" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00f5d4"/>
+      <stop offset="1" stop-color="#9b5de5"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="80" fill="#10002b"/>
+  <circle cx="80" cy="80" r="70" fill="none" stroke="url(#background)" stroke-width="8"/>
+  <path d="M45 116 75 43h11l29 73H98l-7-19H67l-7 19H45Zm27-34h14l-7-20-7 20Z" fill="url(#background)"/>
+</svg>

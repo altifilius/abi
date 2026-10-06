@@ -6,7 +6,7 @@ dev-backend:
 	@$(MAKE) -C backend dev
 
 dev-frontend:
-	@npm run dev
+	@bun run dev
 
 build:
-	@npm run build
+	@bun run build

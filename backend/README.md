@@ -15,8 +15,18 @@ Key vars:
 - `OPENAI_API_KEY`
 - `OPENAI_BASE_URL` (optional)
 - `OPENAI_CHAT_MODEL` (default `gpt-oss-120b`)
+- `OPENAI_IDEA_MODEL` (default `gpt-4.1`)
+- `OPENAI_FUND_MODEL` (default `gpt-4.1-mini`)
 - `OPENAI_EMBEDDING_MODEL` (default `text-embedding-3-large`)
 - `DEFAULT_REPORT_ID`
+- `HOST` (default `127.0.0.1`; keep loopback-only during development)
+- `PORT` (default `8000`)
+- `RELOAD` (default `false` for direct `python -m backend.main` runs)
+- `CORS_ORIGINS` (comma-separated explicit frontend origins; wildcard is rejected)
+- `MAX_REQUEST_BYTES` (default `262144`)
+
+The API has no user authentication. Do not bind it to a public interface without
+an authenticated, TLS-terminating reverse proxy and rate controls.
 
 ## 3) Database migration (Alembic)
 From repo root:
@@ -65,5 +75,7 @@ curl -X POST http://localhost:8000/analyze-idea \
 Expected response keys: `idea_profile`, `summary`, `next_steps`, `dimension_reports` (each with `dimension`, `score`, `diagnosis`, `recommended_actions`, `risks`, `notes`).
 
 ## Frontend serving
-- Dev: run `npm run dev` (frontend on 3000) and `make dev` (backend on 8000 by default). Vite proxies `/api` to the backend; override backend port with `PORT=8001 make dev` if 8000 is busy.
-- Prod/preview: run `npm run build` in repo root; FastAPI will serve `dist/` and `/api` on the backend port (default 8000).
+- Dev: run `bun run dev` (frontend on `127.0.0.1:3000`) and `make dev`
+  (backend on `127.0.0.1:8000` by default). Vite proxies `/api` to the backend.
+- Local production-style run: execute `bun run build` in the repository root,
+  then start FastAPI. The backend serves `dist/` and `/api` on one origin.

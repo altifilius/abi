@@ -1,51 +1,148 @@
-import os
-import asyncio
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from starlette.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from openai import OpenAIError
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import Response, StreamingResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .db import get_session, init_db
 from .schemas import (
-    IdeaRequest,
     AnalyzeIdeaResponse,
-    IdeaChatRequest,
-    IdeaChatResponse,
     FundMatcherRequest,
     FundMatcherResponse,
+    IdeaChatRequest,
+    IdeaChatResponse,
+    IdeaRequest,
 )
 from .services import (
-    normalize_idea,
     analyze_idea_with_report,
-    run_idea_chat,
+    normalize_idea,
     run_fund_matcher,
+    run_idea_chat,
+    run_idea_chat_stream,
 )
+from .settings import settings
 
-app = FastAPI(title="PDF-grounded Idea Advisor")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+logger = logging.getLogger(__name__)
 
 
-@app.on_event("startup")
-async def on_startup():
-    # Ensure extension/tables exist (in production prefer Alembic). Non-fatal if DB is unavailable,
-    # so chat/matcher endpoints can still run without Postgres.
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Chat and matching can run without PostgreSQL; report analysis cannot.
     try:
         await init_db()
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("DB init skipped (continuing without DB): %s", exc)
+        logger.warning("DB init skipped (continuing without DB): %s", exc)
+    yield
+
+
+class RequestBodyLimitMiddleware:
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
+            await self.app(scope, receive, send)
+            return
+
+        messages: list[Message] = []
+        received = 0
+        more_body = True
+        while more_body:
+            message = await receive()
+            messages.append(message)
+            if message["type"] != "http.request":
+                break
+
+            received += len(message.get("body", b""))
+            if received > self.max_bytes:
+                response = JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body too large"},
+                )
+                await response(scope, receive, send)
+                return
+            more_body = message.get("more_body", False)
+
+        message_index = 0
+
+        async def replay_receive() -> Message:
+            nonlocal message_index
+            if message_index < len(messages):
+                message = messages[message_index]
+                message_index += 1
+                return message
+            return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+
+app = FastAPI(
+    title="PDF-grounded Idea Advisor",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_bytes=settings.max_request_bytes,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
+
+
+def add_security_headers(request: Request, response: Response) -> Response:
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+        "base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    )
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Permissions-Policy"] = "camera=(), geolocation=(), microphone=()"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    if request.url.path.startswith("/api/") or request.url.path == "/analyze-idea":
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.middleware("http")
+async def enforce_request_and_response_security(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            if int(content_length) > settings.max_request_bytes:
+                response = JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body too large"},
+                )
+                return add_security_headers(request, response)
+        except ValueError:
+            response = JSONResponse(
+                status_code=400,
+                content={"detail": "Invalid Content-Length header"},
+            )
+            return add_security_headers(request, response)
+
+    response = await call_next(request)
+    return add_security_headers(request, response)
 
 
 @app.post("/analyze-idea", response_model=AnalyzeIdeaResponse)
@@ -130,12 +227,11 @@ def run():
 
     uvicorn.run(
         "backend.main:app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 8000)),
-        reload=True,
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
     )
 
 
 if __name__ == "__main__":
-    asyncio.run(on_startup())
     run()

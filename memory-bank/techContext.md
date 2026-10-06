@@ -1,8 +1,8 @@
 # Tech Context
 
-- Stack: React 19 + TypeScript on Vite 6; Tailwind via CDN (no PostCSS build); icons from `lucide-react`; backend FastAPI with OpenAI (`AsyncOpenAI`) handling chat and fund matcher.
-- Environment: set `OPENAI_API_KEY` (and optional model/base overrides) in `backend/.env`; frontend can point to the API via `VITE_API_BASE` (defaults to `/api`). Keys are no longer exposed client-side.
-- Entry points: `index.html` with import map for CDN hosting, `index.tsx` bootstraps `App`. Styling theme declared inline in `index.html`.
-- Commands: `npm install`, `npm run dev`, `npm run build`, `npm run preview`. No lint/test tooling configured.
-- TypeScript: `moduleResolution: bundler`, `jsx: react-jsx`, `allowJs`: true, `skipLibCheck`: true, decorators enabled though unused.
-- Assets: avatar `./altafilius1.png` referenced via constant; static metadata in `metadata.json` for AI Studio.
+- Stack: React 19 + TypeScript on Vite 7 with Tailwind 4 compiled by the Vite plugin; backend FastAPI with OpenAI (`AsyncOpenAI`) handling chat and fund matching.
+- Environment: set `OPENAI_API_KEY` and database settings in `backend/.env`; frontend settings belong in `.env.local`. `VITE_API_BASE` defaults to same-origin `/api`.
+- Entry points: `index.tsx` imports `styles.css` and bootstraps `App`; FastAPI serves `dist/` when present.
+- Commands: `bun install`, `bun run dev`, `bun run check`; backend tests use `python -m unittest discover -s backend/tests`.
+- Security defaults: explicit CORS origins, loopback-only hosts, bounded request models, no-store API responses, security headers, and no runtime third-party scripts. Authentication is not implemented.
+- Assets: the avatar is served locally from `public/abi-avatar.svg`.

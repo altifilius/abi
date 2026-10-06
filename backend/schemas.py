@@ -1,68 +1,73 @@
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class IdeaRequest(BaseModel):
-    idea_text: str
-    stage: Optional[str] = Field(default=None, description="idea | mvp | scale")
-    sector: Optional[str] = None
-    budget: Optional[str] = None
+class ApiModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class IdeaProfile(BaseModel):
-    sector: Optional[str]
-    target_customer: Optional[str]
-    problem: Optional[str]
-    solution: Optional[str]
-    revenue_model: Optional[str]
-    current_stage: Optional[str]
-    main_risks: List[str] = []
-    constraints: Dict[str, Any] = {}
+class IdeaRequest(ApiModel):
+    idea_text: str = Field(min_length=1, max_length=20_000)
+    stage: Literal["idea", "mvp", "scale"] | None = None
+    sector: str | None = Field(default=None, max_length=200)
+    budget: str | None = Field(default=None, max_length=200)
 
 
-class DimensionReport(BaseModel):
+class IdeaProfile(ApiModel):
+    sector: str | None = None
+    target_customer: str | None = None
+    problem: str | None = None
+    solution: str | None = None
+    revenue_model: str | None = None
+    current_stage: str | None = None
+    main_risks: list[str] = Field(default_factory=list)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+
+
+class DimensionReport(ApiModel):
     dimension: str
-    score: Optional[int] = None
-    diagnosis: Optional[str] = None
-    recommended_actions: List[str] = []
-    risks: List[str] = []
-    notes: Optional[str] = None
+    score: int | None = Field(default=None, ge=0, le=10)
+    diagnosis: str | None = None
+    recommended_actions: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    notes: str | None = None
 
 
-class AnalyzeIdeaResponse(BaseModel):
+class AnalyzeIdeaResponse(ApiModel):
     idea_profile: IdeaProfile
     summary: str
-    next_steps: List[str]
-    dimension_reports: List[DimensionReport]
+    next_steps: list[str]
+    dimension_reports: list[DimensionReport]
 
 
-class IdeaChatMessage(BaseModel):
-    role: str
-    text: str
+class IdeaChatMessage(ApiModel):
+    role: Literal["user", "assistant", "model"]
+    text: str = Field(min_length=1, max_length=12_000)
 
 
-class IdeaChatRequest(BaseModel):
-    messages: List[IdeaChatMessage]
-    mode: str = Field(default="chat", description="chat | summary")
-    language: str | None = Field(default=None, description="en | tr")
-    project_context: str | None = Field(default=None, description="Optional project/title context")
-    stream: bool = Field(default=False, description="Enable streaming response")
+class IdeaChatRequest(ApiModel):
+    messages: list[IdeaChatMessage] = Field(min_length=1, max_length=50)
+    mode: Literal["chat", "summary"] = "chat"
+    language: Literal["en", "tr"] | None = None
+    project_context: str | None = Field(default=None, max_length=2_000)
+    stream: bool = False
 
 
-class IdeaChatResponse(BaseModel):
+class IdeaChatResponse(ApiModel):
     reply: str
 
 
-class FundMatcherRequest(BaseModel):
-    description: str = Field(..., description="Project 1-pager or summary text")
+class FundMatcherRequest(ApiModel):
+    description: str = Field(min_length=1, max_length=20_000)
 
 
-class FundMatchResult(BaseModel):
-    fundId: str
-    score: int
-    rationale: str
-    eligibilityStatus: str
+class FundMatchResult(ApiModel):
+    fundId: str = Field(min_length=1, max_length=100)
+    score: int = Field(ge=0, le=100)
+    rationale: str = Field(max_length=4_000)
+    eligibilityStatus: Literal["eligible", "conditional", "ineligible"]
 
 
-class FundMatcherResponse(BaseModel):
-    matches: List[FundMatchResult]
+class FundMatcherResponse(ApiModel):
+    matches: list[FundMatchResult]

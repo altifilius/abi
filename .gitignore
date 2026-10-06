@@ -22,4 +22,23 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Local secrets
 .env
+.env.*
+!.env.example
+!**/.env.example
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local ingestion inputs and generated data
+backend/*.pdf
+
+# Bun is the canonical package manager
+package-lock.json

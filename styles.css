@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #00f5d4;
+  --color-secondary: #9b5de5;
+  --color-background: #10002b;
+  --color-surface: #240046;
+  --color-glass-dark: rgb(36 0 70 / 0.3);
+  --color-glass-light: rgb(255 255 255 / 0.05);
+  --color-text-primary: #e0aaff;
+  --color-text-secondary: #c77dff;
+  --color-border-dark: rgb(255 255 255 / 0.15);
+  --font-display: ui-sans-serif, system-ui, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --radius: 1.25rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 2rem;
+  --radius-2xl: 2.5rem;
+  --radius-3xl: 3rem;
+  --shadow-glass: 0 8px 32px 0 rgb(155 93 229 / 0.1);
+  --shadow-glow-primary: 0 0 20px rgb(0 245 212 / 0.3);
+  --shadow-glow-secondary: 0 0 20px rgb(155 93 229 / 0.3);
+}
+
+body {
+  font-family: var(--font-display);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes draw-progress {
+  from {
+    stroke-dashoffset: 251.2;
+  }
+  to {
+    stroke-dashoffset: 62.8;
+  }
+}
+
+.progress-ring-circle {
+  animation: draw-progress 1.5s ease-out forwards;
+}
+
+.bg-iridescent {
+  background-image: linear-gradient(120deg, rgb(238 130 238 / 0.1), rgb(0 255 255 / 0.1));
+}
+
+.border-iridescent {
+  border-color: rgb(255 255 255 / 0.2);
+}
+
+.icon-glow {
+  filter: drop-shadow(0 0 8px var(--glow-color));
+  text-shadow: 0 0 12px var(--glow-color);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgb(255 255 255 / 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.2);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.3);
+}

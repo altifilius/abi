@@ -3,13 +3,11 @@ Offline ingestion script: extract PDF text, chunk, embed, and store chunks/playb
 """
 
 import asyncio
-import hashlib
 import uuid
 from pathlib import Path
-from typing import List
 
 import pdfplumber
-from sqlalchemy import insert, select
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db import AsyncSessionLocal, init_db
@@ -17,7 +15,7 @@ from .models import Dimension, DimensionPlaybook, ReportChunk
 from .services import call_llm, embed_text
 
 
-def chunk_text(page_text: str, page_num: int, chunk_size: int = 1200) -> List[dict]:
+def chunk_text(page_text: str, page_num: int, chunk_size: int = 1200) -> list[dict]:
     words = page_text.split()
     chunks = []
     buf = []
@@ -41,8 +39,8 @@ def chunk_text(page_text: str, page_num: int, chunk_size: int = 1200) -> List[di
     ]
 
 
-async def extract_chunks(pdf_path: Path) -> List[dict]:
-    chunks: List[dict] = []
+async def extract_chunks(pdf_path: Path) -> list[dict]:
+    chunks: list[dict] = []
     with pdfplumber.open(pdf_path) as pdf:
         for idx, page in enumerate(pdf.pages, start=1):
             text = page.extract_text() or ""
@@ -50,7 +48,7 @@ async def extract_chunks(pdf_path: Path) -> List[dict]:
     return chunks
 
 
-async def store_chunks(session: AsyncSession, chunks: List[dict], report_id: str) -> None:
+async def store_chunks(session: AsyncSession, chunks: list[dict], report_id: str) -> None:
     texts = [c["text"] for c in chunks]
     embeddings = await embed_text(texts)
 
@@ -79,7 +77,7 @@ async def store_chunks(session: AsyncSession, chunks: List[dict], report_id: str
     await session.commit()
 
 
-async def build_dimensions(session: AsyncSession) -> List[Dimension]:
+async def build_dimensions(session: AsyncSession) -> list[Dimension]:
     # Prompt LLM to derive dimensions; stub with defaults.
     default_dims = [
         {"key": "market", "name": "Market", "description": "Market sizing and demand."},
@@ -93,7 +91,7 @@ async def build_dimensions(session: AsyncSession) -> List[Dimension]:
     return dims
 
 
-async def build_playbooks(session: AsyncSession, dims: List[Dimension]) -> None:
+async def build_playbooks(session: AsyncSession, dims: list[Dimension]) -> None:
     for dim in dims:
         prompt = f"Build a playbook JSON for dimension '{dim.key}' based on the report."
         _ = await call_llm(prompt)

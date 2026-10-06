@@ -1,7 +1,5 @@
-from typing import List, Dict
-
 # Mirror of frontend fund catalog for eligibility analysis.
-FUNDS: List[Dict[str, str]] = [
+FUNDS: list[dict[str, str]] = [
     {
         "id": "tubitak-1501",
         "code": "1501",

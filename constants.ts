@@ -84,5 +84,5 @@ export const INCORPORATION_STEPS: IncorporationStep[] = [
   }
 ];
 
-// Default avatar uses Gravatar identicon; replace the hash or query params to personalize.
-export const ABI_AVATAR_URL = "https://www.gravatar.com/avatar/?d=identicon&s=160";
+// Local asset avoids leaking visitors' IP addresses to an avatar service.
+export const ABI_AVATAR_URL = "/abi-avatar.svg";

@@ -1,5 +1,4 @@
-import os
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
@@ -24,7 +23,8 @@ async def init_db() -> None:
     Run once during setup or in a migration script.
     """
     from sqlalchemy import text
-    from . import models  # ensure model metadata is imported
+
+    from . import models  # noqa: F401 - imports model metadata
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
