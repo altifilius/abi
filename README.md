@@ -4,6 +4,8 @@ Girişimciler ve şirket ekipleri için kaynaklı fon keşfi, proje yazımı ve 
 
 Bu yerel teslimatın kaynak, build ve çalışma dizini **`/home/emre/Projects/abi`**. `abi-upgrade` çalıştırma veya teslimat hedefi değildir. `dist/` bu dizinde üretilir; FastAPI aynı dizinin build’ini sunar.
 
+Çalışma alanı yükseltmesi `upgrade/workspace-build` dalında yayımlandı; güncel menü/hesap geliştirmeleriyle birleşen devam dalı `upgrade/menu-workspace-execution`. Klasörler arasında dosya kopyalamak yerine bu dizinde Git pull/merge kullanın. `abi.service` ve `abi-worker.service` bu dizinin `.venv-menu` ortamını çalıştırır.
+
 ## Bu build’in kapsamı
 
 - **Free:** kalıcı kişisel projeler, sohbet ve yapılandırılmış profil, kullanıcı onaylı AI profil önerileri, düzenlenebilir genel proje taslağı, gerçek DOCX/PDF indirme ve resmî kaynaklı fon keşfi.

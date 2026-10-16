@@ -23,6 +23,17 @@ interface NotificationRecord {
   read_at: string | null;
 }
 
+interface MailDeliveryRecord {
+  id: string;
+  kind: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  next_attempt_at: string | null;
+  created_at: string;
+  sent_at: string | null;
+}
+
 export default function NotificationsScreen({ user }: { user: User }) {
   const text = useEvidenceText();
   const { language } = useI18n();
@@ -191,6 +202,89 @@ export default function NotificationsScreen({ user }: { user: User }) {
           </button>
         )}
       </div>
+      <MailDeliveryHistory key={user.id} userId={user.id} />
+    </section>
+  );
+}
+
+function MailDeliveryHistory({ userId }: { userId: string }) {
+  const text = useEvidenceText();
+  const [deliveries, setDeliveries] = useState<MailDeliveryRecord[] | null>(null);
+  const [error, setError] = useState('');
+  const activeLoad = useRef<AbortController | null>(null);
+  const load = useCallback(() => {
+    activeLoad.current?.abort();
+    const controller = new AbortController();
+    activeLoad.current = controller;
+    setDeliveries(null);
+    setError('');
+    api<MailDeliveryRecord[]>('/mail-deliveries?limit=100', { signal: controller.signal })
+      .then((values) => {
+        if (!controller.signal.aborted) setDeliveries(values);
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted) setError(errorText(reason));
+      });
+    return controller;
+  }, []);
+  useEffect(() => {
+    const controller = load();
+    return () => {
+      controller.abort();
+      activeLoad.current?.abort();
+    };
+  }, [load]);
+  return (
+    <section className="stack" aria-labelledby={`mail-history-${userId}`}>
+      <h2 id={`mail-history-${userId}`}>
+        {text('Sunucu e-posta teslimat geçmişi', 'Server email delivery history')}
+      </h2>
+      <p>
+        {text(
+          'Hesabınıza ait son 100 teslimat kaydı. SMTP kabulü, e-postanın alıcının gelen kutusuna ulaştığı anlamına gelmez.',
+          'The latest 100 delivery records for your account. SMTP acceptance does not confirm arrival in the recipient’s inbox.',
+        )}
+      </p>
+      <button className={buttonClass} disabled={deliveries === null && !error} onClick={load}>
+        {text('Teslimat geçmişini yenile', 'Refresh delivery history')}
+      </button>
+      {error && <p role="alert">{error}</p>}
+      {deliveries === null && !error && (
+        <p role="status">{text('Teslimatlar yükleniyor…', 'Loading deliveries…')}</p>
+      )}
+      {deliveries?.length === 0 && (
+        <p>{text('Kayıtlı e-posta teslimatı yok.', 'No recorded email deliveries.')}</p>
+      )}
+      <ul className="record-list">
+        {deliveries?.map((item) => (
+          <li key={item.id}>
+            <strong>
+              {item.kind} · {item.status}
+            </strong>
+            <dl>
+              <div>
+                <dt>{text('Deneme', 'Attempts')}</dt>
+                <dd>{item.attempts}</dd>
+              </div>
+              <div>
+                <dt>{text('Oluşturuldu', 'Created')}</dt>
+                <dd>{timestamp(item.created_at)}</dd>
+              </div>
+              <div>
+                <dt>{text('SMTP kabulü', 'SMTP accepted')}</dt>
+                <dd>{timestamp(item.sent_at)}</dd>
+              </div>
+              {item.next_attempt_at && ['queued', 'retry'].includes(item.status) && (
+                <div>
+                  <dt>{text('Sonraki deneme', 'Next attempt')}</dt>
+                  <dd>{timestamp(item.next_attempt_at)}</dd>
+                </div>
+              )}
+            </dl>
+            {item.last_error && <p>{item.last_error}</p>}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

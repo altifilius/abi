@@ -1,71 +1,39 @@
-# Backend Setup (FastAPI + Postgres + pgvector)
+# Abi backend
 
-## 1) Install dependencies
-```bash
-pip install -r backend/requirements.txt
-```
+Kaynak, build ve çalıştırma hedefi `/home/emre/Projects/abi`. Tam ürün kapsamı, güvenlik sınırları ve işletim yönergeleri için [ana README](../README.md) kullanılır.
 
-## 2) Environment
-Copy the sample and fill in secrets/URLs:
-```bash
-cp backend/.env.example backend/.env
-```
-Key vars:
-- `DATABASE_URL` (postgresql+asyncpg://user:pass@host:port/db)
-- `OPENAI_API_KEY` (OpenAI or OpenRouter)
-- `OPENAI_BASE_URL` (optional; inferred as `https://openrouter.ai/api/v1` when key starts with `sk-or-`)
-- `OPENAI_CHAT_MODEL` (default `gpt-4o-mini`)
-- `OPENAI_EMBEDDING_MODEL` (default `text-embedding-3-large`)
-- `DEFAULT_REPORT_ID`
+## Kurulum ve çalıştırma
 
-OpenRouter tip: set `OPENAI_BASE_URL=https://openrouter.ai/api/v1` (or rely on the auto-inference above) and prefer namespaced model ids, e.g. `meta-llama/llama-3.1-8b-instruct:free` or `openai/gpt-4o-mini`.
+Aşağıdaki komutları proje kökünde çalıştırın:
 
-## 3) Database migration (Alembic)
-From repo root:
-```bash
-cd backend
-alembic -c alembic.ini upgrade head
-# or
+```sh
+make install
+# Yalnız ilk kurulumda backend/.env.example dosyasından backend/.env oluşturun.
+# Mevcut .env dosyasını ezmeden gerçek bağlantı ve servis ayarlarını yapılandırın.
 make migrate
-```
-This creates the `vector` extension and tables: `report_chunks`, `dimensions`, `dimension_playbooks`.
-
-## 4) Ingest a report PDF
-Provide a PDF path and report id:
-```bash
-cd backend
-make ingest PDF=/path/to/report.pdf REPORT_ID=demo-report-1
-# or direct
-python -m backend.ingest_report /path/to/report.pdf --report-id demo-report-1
-```
-Ingestion is idempotent per `(report_id, page, chunk_index)`.
-
-## 5) Run the API
-```bash
-cd backend
+make seed
+bun run build
 make dev
-# or
-uvicorn backend.main:app --reload
 ```
 
-## API endpoints
-- `POST /api/idea-chat` — chat/summary responses for the AI Coach (default model: gpt-4o-mini).
-- `POST /api/fund-matcher` — JSON-scored eligibility results for provided project description (model: gpt-4.1-mini).
+Python ortamı `.venv-menu`; FastAPI üretim build'ini ve `/api` uçlarını `http://127.0.0.1:8001` üzerinden sunar. Vite geliştirme sunucusu `make dev-frontend` ile 3000 portunda açılır ve `/api` isteklerini 8001'e yönlendirir.
 
-## 6) Test /analyze-idea
-Example request:
-```bash
-curl -X POST http://localhost:8000/analyze-idea \
-  -H "Content-Type: application/json" \
-  -d '{
-    "idea_text": "A B2B SaaS for predictive maintenance in manufacturing.",
-    "stage": "idea",
-    "sector": "manufacturing",
-    "budget": "100k EUR"
-  }'
+Şemanın tek otoritesi Alembic'tir. Güncel revision `0004_task_context`; uygulama açılışta tablo oluşturmaz ve eski şemayı kabul etmez. Mevcut kayıtları silerek veya revision damgasını değiştirerek bu kontrolü atlamayın.
+
+## Servis ayarları
+
+- Gerçek DB/AI/SMTP bağlantıları Git dışında tutulan `backend/.env` içindedir; örnek alanları için `backend/.env.example` kullanılır.
+- AI sağlayıcısı ve modeli açıkça yapılandırılır. Çalışma alanının `local` politikası haricî sağlayıcıya sessiz geçiş yapmaz.
+- Özel dosyalar `STORAGE_ROOT` altında, webroot dışında saklanır. OCR yerel Tesseract ve yapılandırılmış dil verilerini kullanır.
+- `GET /api/health` process canlılığıdır; `GET /api/ready` DB/depo hazırlığını ve diğer servislerin ayrı durumlarını verir.
+- Kalıcı e-posta/hatırlatma işçisi `make reminders` ile çalışır; yapılandırma tek başına başarılı teslimat değildir.
+
+## Rapor ingestion ve doğrulama
+
+```sh
+make -C backend ingest PDF=/absolute/path/report.pdf REPORT_ID=rapor-1 AI_POLICY=local
+ruff check backend
+.venv-menu/bin/python -m unittest discover -s backend/tests -v
 ```
-Expected response keys: `idea_profile`, `summary`, `next_steps`, `dimension_reports` (each with `dimension`, `score`, `diagnosis`, `recommended_actions`, `risks`, `notes`).
 
-## Frontend serving
-- Dev: run `npm run dev` (frontend on 3000) and `make dev` (backend on 8000 by default). Vite proxies `/api` to the backend; override backend port with `PORT=8001 make dev` if 8000 is busy.
-- Prod/preview: run `npm run build` in repo root; FastAPI will serve `dist/` and `/api` on the backend port (default 8000).
+Ingestion kaynak hash'i, rapor/politika/model/boyut sürümleriyle atomiktir. Gerçek PostgreSQL davranış testleri için `ABI_TEST_DATABASE_URL` yalnız ayrı, boş ve migration yapılmış test veritabanını göstermelidir; canlı veya tarayıcı kabul veritabanını kullanmayın.

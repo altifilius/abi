@@ -1,5 +1,12 @@
 # Değişiklikler
 
+## Geliştirme kopyalarının birleştirilmesi
+
+- `upgrade/workspace-build` çalışma alanı yükseltmesi GitHub’a yayımlandı ve `abi` içindeki `upgrade/menu-workspace-execution` dalına pull ile alındı. Daha yeni menü, hesap, lazy-loading ve `0004_task_context` davranışları korundu.
+- Web ve hatırlatma systemd servisleri `/home/emre/Projects/abi` ve `.venv-menu` ortamına taşındı. Eski ekran kopyaları ve üretilmiş Python önbellekleri yeni geliştirme hedefinde tutulmaz.
+- Eski ekip ekranındaki kişisel e-posta teslimat geçmişi Bildirimler ekranına; kullanıcı kimliği ve JSON ayrıntılarıyla son 100 faaliyet Özet ekranına taşındı. Yeni menüye geçişte bu işlevler kaybolmaz.
+- Kaynak kodu gömülü DB parolası içermez; gerçek `.env`, özel belge deposu ve veritabanı Git’e dahil edilmez.
+
 ## Ekran bazlı yükleme
 
 - Ana menü ekranları ve proje alt bölümleri `React.lazy` ile ihtiyaç anında yüklenir; ekip/kuruluş rehberi de ayrıldı. Başlangıç giriş/oturum/özet/ana gezinme ilk pakette kaldı.

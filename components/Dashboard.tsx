@@ -5,6 +5,17 @@ import { activityDestination, activityLabel } from '../services/activity';
 import { api, errorMessage } from '../services/api';
 import type { Project, Usage, Workspace } from '../types';
 
+interface ActivityRecord {
+  id: string;
+  workspace_id?: string;
+  project_id?: string | null;
+  event_type: string;
+  actor_id?: string | null;
+  actor_name?: string | null;
+  detail?: Record<string, unknown>;
+  created_at: string;
+}
+
 interface Overview {
   counts: {
     projects: number;
@@ -17,15 +28,7 @@ interface Overview {
     application_review_requested: number;
     application_approved: number;
   };
-  recent_activity: {
-    id: string;
-    workspace_id?: string;
-    project_id?: string | null;
-    event_type: string;
-    actor_name?: string;
-    detail?: Record<string, unknown>;
-    created_at: string;
-  }[];
+  recent_activity: ActivityRecord[];
   upcoming: {
     id: string;
     kind: string;
@@ -52,6 +55,9 @@ export default function Dashboard({
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   const root = `/w/${workspace.id}`;
+  const [activity, setActivity] = useState<ActivityRecord[] | null>(null);
+  const [activityError, setActivityError] = useState('');
+  const [activityRequested, setActivityRequested] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     setOverview(null);
@@ -65,6 +71,23 @@ export default function Dashboard({
       });
     return () => controller.abort();
   }, [workspace.id]);
+  useEffect(() => {
+    setActivity(null);
+    setActivityError('');
+    if (!activityRequested) return;
+    const controller = new AbortController();
+    api<ActivityRecord[]>(`/workspaces/${workspace.id}/activity?limit=100`, {
+      signal: controller.signal,
+    })
+      .then((values) => {
+        if (!controller.signal.aborted) setActivity(values);
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted) setActivityError(errorMessage(reason));
+      });
+    return () => controller.abort();
+  }, [workspace.id, activityRequested]);
+  const displayedActivity = activityRequested ? activity : overview?.recent_activity;
   const recentProjects = [...projects]
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
     .slice(0, 4);
@@ -284,9 +307,18 @@ export default function Dashboard({
       </div>
       <section className="panel stack">
         <h2>{text('Son faaliyetler', 'Recent activity')}</h2>
-        {overview?.recent_activity.length ? (
-          <ul className="activity">
-            {overview.recent_activity.map((event) => (
+        {!activityRequested && (
+          <button onClick={() => setActivityRequested(true)}>
+            {text('Son 100 faaliyeti göster', 'Show latest 100 events')}
+          </button>
+        )}
+        {activityRequested && activity === null && !activityError && (
+          <p role="status">{text('Faaliyetler yükleniyor…', 'Loading activity…')}</p>
+        )}
+        {activityError && <p role="alert">{activityError}</p>}
+        {displayedActivity?.length ? (
+          <ul className="record-list">
+            {displayedActivity.map((event) => (
               <li key={event.id}>
                 <span>
                   <Link to={activityDestination({ ...event, workspace_id: workspace.id })}>
@@ -297,12 +329,20 @@ export default function Dashboard({
                 <time dateTime={event.created_at}>
                   {new Date(event.created_at).toLocaleString()}
                 </time>
+                <details>
+                  <summary>{text('Faaliyet ayrıntıları', 'Activity details')}</summary>
+                  <p>
+                    {text('İşlemi yapan kullanıcı', 'Actor')}: {event.actor_name || '—'} ·{' '}
+                    {event.actor_id || text('Sistem / silinmiş kullanıcı', 'System / deleted user')}
+                  </p>
+                  <pre>{JSON.stringify(event.detail || {}, null, 2)}</pre>
+                </details>
               </li>
             ))}
           </ul>
-        ) : (
+        ) : displayedActivity && !activityError ? (
           <p>{text('Henüz kayıtlı faaliyet yok.', 'No recorded activity yet.')}</p>
-        )}
+        ) : null}
       </section>
     </div>
   );
