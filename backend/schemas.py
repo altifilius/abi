@@ -1,68 +1,40 @@
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+"""Strict source-grounded report schemas (workspace AI requests live in ai.py)."""
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class IdeaRequest(BaseModel):
-    idea_text: str
-    stage: Optional[str] = Field(default=None, description="idea | mvp | scale")
-    sector: Optional[str] = None
-    budget: Optional[str] = None
+class ApiModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class IdeaProfile(BaseModel):
-    sector: Optional[str]
-    target_customer: Optional[str]
-    problem: Optional[str]
-    solution: Optional[str]
-    revenue_model: Optional[str]
-    current_stage: Optional[str]
-    main_risks: List[str] = []
-    constraints: Dict[str, Any] = {}
+class PlaybookStageActions(ApiModel):
+    idea: list[str]
+    mvp: list[str]
+    scale: list[str]
 
 
-class DimensionReport(BaseModel):
-    dimension: str
-    score: Optional[int] = None
-    diagnosis: Optional[str] = None
-    recommended_actions: List[str] = []
-    risks: List[str] = []
-    notes: Optional[str] = None
+class DimensionPlaybookData(ApiModel):
+    dimension: str = Field(min_length=1)
+    key_questions: list[str]
+    common_mistakes: list[str]
+    recommended_actions_by_stage: PlaybookStageActions
 
 
-class AnalyzeIdeaResponse(BaseModel):
-    idea_profile: IdeaProfile
-    summary: str
-    next_steps: List[str]
-    dimension_reports: List[DimensionReport]
+class EvidenceCitation(ApiModel):
+    chunk_id: str = Field(min_length=1)
+    quote: str = Field(min_length=1, max_length=1200)
 
 
-class IdeaChatMessage(BaseModel):
-    role: str
-    text: str
+class DimensionReport(ApiModel):
+    dimension: str = Field(min_length=1)
+    score: int | None = Field(ge=0, le=10)
+    diagnosis: str = Field(min_length=1)
+    recommended_actions: list[str]
+    risks: list[str]
+    notes: str = Field(min_length=1)
+    citations: list[EvidenceCitation] = Field(min_length=1)
 
 
-class IdeaChatRequest(BaseModel):
-    messages: List[IdeaChatMessage]
-    mode: str = Field(default="chat", description="chat | summary")
-    language: str | None = Field(default=None, description="en | tr")
-    project_context: str | None = Field(default=None, description="Optional project/title context")
-    stream: bool = Field(default=False, description="Enable streaming response")
-
-
-class IdeaChatResponse(BaseModel):
-    reply: str
-
-
-class FundMatcherRequest(BaseModel):
-    description: str = Field(..., description="Project 1-pager or summary text")
-
-
-class FundMatchResult(BaseModel):
-    fundId: str
-    score: int
-    rationale: str
-    eligibilityStatus: str
-
-
-class FundMatcherResponse(BaseModel):
-    matches: List[FundMatchResult]
+class ReportSummary(ApiModel):
+    summary: str = Field(min_length=1)
+    next_steps: list[str]

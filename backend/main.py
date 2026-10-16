@@ -1,128 +1,147 @@
-import os
-import asyncio
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from starlette.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from openai import OpenAIError
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .db import get_session, init_db
-from .schemas import (
-    IdeaRequest,
-    AnalyzeIdeaResponse,
-    IdeaChatRequest,
-    IdeaChatResponse,
-    FundMatcherRequest,
-    FundMatcherResponse,
+from .db import engine, init_db
+from .settings import settings
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await init_db()
+    settings.storage_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    yield
+    await engine.dispose()
+
+
+class RequestBodyLimitMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH", "DELETE"}:
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers", []))
+        is_upload = headers.get(b"content-type", b"").startswith(b"multipart/form-data") and scope[
+            "path"
+        ].endswith("/documents")
+        max_bytes = settings.max_upload_bytes + 65_536 if is_upload else settings.max_request_bytes
+        messages: list[Message] = []
+        received = 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            received += len(message.get("body", b""))
+            if received > max_bytes:
+                await JSONResponse(status_code=413, content={"detail": "Request body too large"})(
+                    scope, receive, send
+                )
+                return
+            messages.append(message)
+            if not message.get("more_body", False):
+                break
+        index = 0
+
+        async def replay_receive() -> Message:
+            nonlocal index
+            if index < len(messages):
+                message = messages[index]
+                index += 1
+                return message
+            return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+
+app = FastAPI(
+    title="Abi workspace", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 )
-from .services import (
-    normalize_idea,
-    analyze_idea_with_report,
-    run_idea_chat,
-    run_fund_matcher,
-)
-
-app = FastAPI(title="PDF-grounded Idea Advisor")
-
+app.add_middleware(RequestBodyLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
 
 
-@app.on_event("startup")
-async def on_startup():
-    # Ensure extension/tables exist (in production prefer Alembic). Non-fatal if DB is unavailable,
-    # so chat/matcher endpoints can still run without Postgres.
-    try:
-        await init_db()
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("DB init skipped (continuing without DB): %s", exc)
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request: Request, error: RequestValidationError):
+    # Never echo submitted passwords, project text, or document content.
+    errors = [
+        {"field": ".".join(str(part) for part in item["loc"]), "message": item["msg"]}
+        for item in error.errors()
+    ]
+    return JSONResponse(
+        status_code=422, content={"detail": "Check the submitted fields", "errors": errors}
+    )
 
 
-@app.post("/analyze-idea", response_model=AnalyzeIdeaResponse)
-async def analyze_idea(
-    payload: IdeaRequest, session: AsyncSession = Depends(get_session)
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    )
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Permissions-Policy"] = "camera=(), geolocation=(), microphone=()"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "alive", "service": "abi", "billing": "not_configured"}
+
+
+# Routers are loaded before the SPA fallback so private API errors stay API errors.
+from . import account, ai, applications, collaboration, funding, menu_api, workspaces  # noqa: E402
+
+for router in (
+    workspaces.router,
+    funding.router,
+    applications.router,
+    collaboration.router,
+    ai.router,
+    account.router,
+    menu_api.router,
 ):
-    try:
-        idea_profile = await normalize_idea(
-            payload.idea_text,
-            {
-                "stage": payload.stage,
-                "sector": payload.sector,
-                "budget": payload.budget,
-            },
-        )
-        analysis = await analyze_idea_with_report(session, idea_profile)
-        return analysis
-    except OpenAIError as e:
-        raise HTTPException(status_code=502, detail="Upstream LLM error") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Analysis failed") from e
+    app.include_router(router)
 
 
-@app.post("/api/idea-chat", response_model=IdeaChatResponse)
-async def idea_chat(payload: IdeaChatRequest):
-    if not payload.messages:
-        raise HTTPException(status_code=400, detail="messages are required")
-    try:
-        # Streaming mode
-        if payload.stream:
-            iterator = await run_idea_chat_stream(
-                [m.model_dump() for m in payload.messages],
-                mode=payload.mode,
-                language=payload.language,
-                project_context=payload.project_context,
-            )
-            return StreamingResponse(iterator, media_type="text/plain")
-
-        reply = await run_idea_chat(
-            [m.model_dump() for m in payload.messages],
-            mode=payload.mode,
-            language=payload.language,
-            project_context=payload.project_context,
-        )
-        return {"reply": reply}
-    except OpenAIError as e:
-        raise HTTPException(status_code=502, detail="Upstream LLM error") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Idea chat failed") from e
-
-
-@app.post("/api/fund-matcher", response_model=FundMatcherResponse)
-async def fund_matcher(payload: FundMatcherRequest):
-    if not payload.description or not payload.description.strip():
-        raise HTTPException(status_code=400, detail="description is required")
-    try:
-        matches = await run_fund_matcher(payload.description)
-        return {"matches": matches}
-    except OpenAIError as e:
-        raise HTTPException(status_code=502, detail="Upstream LLM error") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Fund matcher failed") from e
-
-# Serve built frontend (dist) when available
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
 if DIST_DIR.exists():
-    app.mount("/", StaticFiles(directory=DIST_DIR, html=True), name="spa-static")
+    app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
-    async def spa_fallback(full_path: str):
-        # Avoid swallowing API 404s
-        if full_path.startswith("api"):
-            raise HTTPException(status_code=404)
-        index_file = DIST_DIR / "index.html"
-        if index_file.exists():
-            return FileResponse(index_file)
-        raise HTTPException(status_code=404)
+    async def frontend(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(404, "API route not found")
+        candidate = (DIST_DIR / full_path).resolve()
+        if candidate.is_relative_to(DIST_DIR) and candidate.is_file():
+            return FileResponse(candidate)
+        if "." in Path(full_path).name:
+            raise HTTPException(404, "Asset not found")
+        return FileResponse(DIST_DIR / "index.html")
 
 
 def run():
@@ -130,12 +149,12 @@ def run():
 
     uvicorn.run(
         "backend.main:app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 8000)),
-        reload=True,
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+        access_log=False,
     )
 
 
 if __name__ == "__main__":
-    asyncio.run(on_startup())
     run()

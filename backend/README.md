@@ -12,11 +12,13 @@ cp backend/.env.example backend/.env
 ```
 Key vars:
 - `DATABASE_URL` (postgresql+asyncpg://user:pass@host:port/db)
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL` (optional)
-- `OPENAI_CHAT_MODEL` (default `gpt-oss-120b`)
+- `OPENAI_API_KEY` (OpenAI or OpenRouter)
+- `OPENAI_BASE_URL` (optional; inferred as `https://openrouter.ai/api/v1` when key starts with `sk-or-`)
+- `OPENAI_CHAT_MODEL` (default `gpt-4o-mini`)
 - `OPENAI_EMBEDDING_MODEL` (default `text-embedding-3-large`)
 - `DEFAULT_REPORT_ID`
+
+OpenRouter tip: set `OPENAI_BASE_URL=https://openrouter.ai/api/v1` (or rely on the auto-inference above) and prefer namespaced model ids, e.g. `meta-llama/llama-3.1-8b-instruct:free` or `openai/gpt-4o-mini`.
 
 ## 3) Database migration (Alembic)
 From repo root:
@@ -47,7 +49,7 @@ uvicorn backend.main:app --reload
 ```
 
 ## API endpoints
-- `POST /api/idea-chat` — chat/summary responses for the AI Coach (model: gpt-4.1).
+- `POST /api/idea-chat` — chat/summary responses for the AI Coach (default model: gpt-4o-mini).
 - `POST /api/fund-matcher` — JSON-scored eligibility results for provided project description (model: gpt-4.1-mini).
 
 ## 6) Test /analyze-idea

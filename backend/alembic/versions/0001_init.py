@@ -1,9 +1,9 @@
 """Initial schema with pgvector and core tables."""
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from alembic import op
 from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "0001_init"
@@ -40,7 +40,12 @@ def upgrade() -> None:
     op.create_table(
         "dimension_playbooks",
         sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("dimension_key", sa.String(), sa.ForeignKey("dimensions.key", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "dimension_key",
+            sa.String(),
+            sa.ForeignKey("dimensions.key", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("playbook_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint("dimension_key", name="uq_dimension_key"),

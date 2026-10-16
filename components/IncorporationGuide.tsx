@@ -1,138 +1,217 @@
-import React, { useState } from 'react';
-import { Calendar, CheckSquare, Building, Landmark, Scale, Clock } from 'lucide-react';
-import { IncorporationStep } from '../types';
-import { INCORPORATION_STEPS } from '../constants';
-import { useI18n } from '../i18n';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../services/api';
+import type { Workspace } from '../types';
+import {
+  buttonClass,
+  errorText,
+  inputClass,
+  panelClass,
+  SourceLink,
+  timestamp,
+  useEvidenceText,
+} from './EvidenceUi';
 
-const IncorporationGuide: React.FC = () => {
-  const [steps, setSteps] = useState<IncorporationStep[]>(INCORPORATION_STEPS);
-  const { t } = useI18n();
+interface IncorporationState {
+  country: string;
+  legal_form: 'AS' | 'LTD';
+  checklist: Record<string, boolean>;
+  steps: {
+    key: string;
+    title: string;
+    title_en: string;
+    description: string;
+    description_en: string;
+    source_url: string;
+  }[];
+  sources: { title: string; url: string }[];
+  disclaimer: string;
+  disclaimer_en: string;
+  updated_at: string | null;
+  updated_by: string | null;
+}
 
-  const toggleStep = (id: string) => {
-    setSteps(steps.map(s =>
-      s.id === id ? { ...s, completed: !s.completed } : s
-    ));
-  };
+export default function IncorporationGuide({ workspace }: { workspace: Workspace }) {
+  const text = useEvidenceText();
+  const [savedState, setSavedState] = useState<{
+    workspaceId: string;
+    value: IncorporationState;
+  } | null>(null);
+  const state = savedState?.workspaceId === workspace.id ? savedState.value : null;
+  const scope = useRef<{ workspaceId: string; controller: AbortController } | null>(null);
+  const loadRequest = useRef<AbortController | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const canEdit = ['owner', 'admin', 'reviewer', 'editor'].includes(workspace.role || '');
 
-  const getCategoryIcon = (cat: string) => {
-    switch (cat) {
-      case 'legal': return <Scale size={14} />;
-      case 'tax': return <Landmark size={14} />;
-      case 'compliance': return <Building size={14} />;
-      default: return <CheckSquare size={14} />;
+  const loadIncorporation = useCallback(async () => {
+    const active = scope.current;
+    if (active?.workspaceId !== workspace.id || active.controller.signal.aborted) return;
+    loadRequest.current?.abort();
+    setError('');
+    if (workspace.country !== 'TR') {
+      setSavedState(null);
+      setBusy(false);
+      return;
     }
-  };
+    const request = new AbortController();
+    loadRequest.current = request;
+    setBusy(true);
+    try {
+      const data = await api<IncorporationState>(`/workspaces/${workspace.id}/incorporation`, {
+        signal: request.signal,
+      });
+      if (!request.signal.aborted && !active.controller.signal.aborted)
+        setSavedState({ workspaceId: workspace.id, value: data });
+    } catch (reason) {
+      if (!request.signal.aborted && !active.controller.signal.aborted) setError(errorText(reason));
+    } finally {
+      if (!request.signal.aborted && !active.controller.signal.aborted) setBusy(false);
+    }
+  }, [workspace.id, workspace.country]);
 
-  const progress = Math.round((steps.filter(s => s.completed).length / steps.length) * 100);
+  useEffect(() => {
+    const active = { workspaceId: workspace.id, controller: new AbortController() };
+    scope.current = active;
+    setSavedState(null);
+    void loadIncorporation();
+    return () => {
+      active.controller.abort();
+      loadRequest.current?.abort();
+    };
+  }, [workspace.id, loadIncorporation]);
+
+  async function save(patch: { legal_form?: 'AS' | 'LTD'; checklist?: Record<string, boolean> }) {
+    const active = scope.current;
+    if (
+      active?.workspaceId !== workspace.id ||
+      active.controller.signal.aborted ||
+      workspace.country !== 'TR' ||
+      !canEdit
+    )
+      return;
+    const signal = active.controller.signal;
+    setBusy(true);
+    setError('');
+    try {
+      const data = await api<IncorporationState>(`/workspaces/${workspace.id}/incorporation`, {
+        method: 'PATCH',
+        signal,
+        json: patch,
+      });
+      if (!signal.aborted) setSavedState({ workspaceId: workspace.id, value: data });
+    } catch (reason) {
+      if (!signal.aborted) setError(errorText(reason));
+    } finally {
+      if (!signal.aborted) setBusy(false);
+    }
+  }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
-      {/* Main Checklist */}
-      <div className="flex-1 space-y-6">
-        <div className="bg-glass-dark p-8 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h3 className="text-xl font-bold text-white">{t('incorporation.roadmapTitle')}</h3>
-                    <p className="text-sm text-text-secondary">{t('incorporation.country')}</p>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-white bg-white/5 px-4 py-2 rounded-xl border border-white/10">
-                    <span className="font-bold text-primary">{progress}%</span> {t('incorporation.complete')}
-                </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full h-2 bg-white/5 rounded-full mb-10 overflow-hidden border border-white/5">
-                <div
-                    className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-700 ease-out shadow-glow-primary"
-                    style={{ width: `${progress}%` }}
-                />
-            </div>
-
-            <div className="space-y-4">
-                {steps.map((step, index) => (
-                    <div
-                        key={step.id}
-                        className={`group relative flex gap-4 p-5 rounded-2xl border transition-all duration-300 ${
-                            step.completed
-                                ? 'bg-white/5 border-transparent opacity-60'
-                                : 'bg-glass-dark border-white/10 hover:border-primary/30 hover:shadow-glass hover:bg-white/5'
-                        }`}
-                    >
-                        {/* Vertical Line */}
-                        {index !== steps.length - 1 && (
-                             <div className="absolute left-[29px] top-14 bottom-[-18px] w-0.5 bg-white/10 group-hover:bg-primary/20 transition-colors" />
-                        )}
-
-                        <button
-                            onClick={() => toggleStep(step.id)}
-                            className={`flex-shrink-0 w-6 h-6 rounded-lg border flex items-center justify-center transition-all z-10 ${
-                                step.completed
-                                    ? 'bg-primary border-primary text-background shadow-glow-primary'
-                                    : 'border-white/30 text-transparent hover:border-primary bg-background'
-                            }`}
-                        >
-                            <CheckSquare size={14} fill="currentColor" />
-                        </button>
-
-                        <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                                <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold flex items-center gap-1 ${
-                                    step.category === 'legal' ? 'bg-secondary/10 text-secondary border-secondary/30' :
-                                    step.category === 'tax' ? 'bg-primary/10 text-primary border-primary/30' :
-                                    'bg-orange-500/10 text-orange-400 border-orange-500/30'
-                                }`}>
-                                   {getCategoryIcon(step.category)} {t(`incorporation.category.${step.category}`)}
-                                </span>
-                                <h4 className={`font-semibold ${step.completed ? 'text-text-secondary line-through' : 'text-white'}`}>
-                                    {t(`incorporation.step.${step.id}.title`)}
-                                </h4>
-                            </div>
-                            <p className="text-sm text-text-secondary">{t(`incorporation.step.${step.id}.desc`)}</p>
-                        </div>
-                    </div>
+    <section className={panelClass}>
+      <h2 className="text-xl font-semibold">
+        {text('Türkiye şirket kuruluş rehberi', 'Türkiye incorporation guide')}
+      </h2>
+      <p>
+        {text(
+          'Resmî kaynaklara bağlı kişisel kontrol listesi. İşaretler kendi beyanınızdır; şirketin kurulduğunu veya resmî onayı kanıtlamaz. Otomatik tescil, randevu veya sahte takvim oluşturulmaz.',
+          'An official-source-backed self-checklist. Check marks are your own declarations, not proof of incorporation or official approval. No automatic registration, appointment or fabricated calendar is created.',
+        )}
+      </p>
+      {workspace.country !== 'TR' && (
+        <Link to={`/w/${workspace.id}/workspace/info`}>
+          {text('Çalışma alanı bilgileri', 'Workspace information')}
+        </Link>
+      )}
+      {workspace.country !== 'TR' ? (
+        <p>
+          {text(
+            'Bu rehber yalnızca Türkiye içindir. Ülkeyi çalışma alanı bilgileri bölümünden güncelleyebilirsiniz.',
+            'This guide covers Türkiye only. You can update the country in workspace information.',
+          )}
+        </p>
+      ) : (
+        <>
+          <p>
+            {text(
+              'Temel rehber ve kişisel kontrol listesi Free planında kullanılabilir. Ekip görevleri ve incelemeler Pro gerektirir.',
+              'Basic guidance and self-checklist are available on Free. Team tasks and reviews require Pro.',
+            )}
+          </p>
+          <button className={buttonClass} disabled={busy} onClick={() => void loadIncorporation()}>
+            {text('Sunucudan yenile', 'Reload from server')}
+          </button>
+          {busy && <p role="status">{text('Kaydediliyor / yükleniyor…', 'Saving / loading…')}</p>}
+          {error && <p role="alert">{error}</p>}
+          {!canEdit && (
+            <p>
+              {text(
+                'Salt okunur. Kontrol listesini güncellemek düzenleyici veya daha yüksek bir rol gerektirir.',
+                'Read-only. Updating the checklist requires an editor or higher role.',
+              )}
+            </p>
+          )}
+          {state && (
+            <>
+              <label>
+                {text('Şirket türü', 'Company form')}
+                <select
+                  className={inputClass}
+                  value={state.legal_form}
+                  disabled={busy || !canEdit}
+                  onChange={(event) => save({ legal_form: event.target.value as 'AS' | 'LTD' })}
+                >
+                  <option value="LTD">
+                    {text('Limited şirket (LTD)', 'Limited company (LTD)')}
+                  </option>
+                  <option value="AS">
+                    {text('Anonim şirket (AŞ)', 'Joint-stock company (AŞ)')}
+                  </option>
+                </select>
+              </label>
+              <p>{text(state.disclaimer, state.disclaimer_en)}</p>
+              <p>
+                {text('Güncel kuruluş türü', 'Current incorporation form')}:{' '}
+                {state.legal_form === 'AS'
+                  ? text('Anonim şirket (AŞ)', 'Joint-stock company (AŞ)')
+                  : text('Limited şirket (LTD)', 'Limited company (LTD)')}
+              </p>
+              {state.steps.map((step) => (
+                <article key={step.key} className="border-t border-border-dark pt-4 space-y-2">
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      disabled={busy || !canEdit}
+                      checked={state.checklist[step.key] === true}
+                      onChange={(event) =>
+                        save({ checklist: { [step.key]: event.target.checked } })
+                      }
+                    />
+                    <span className="font-semibold">{text(step.title, step.title_en)}</span>
+                  </label>
+                  <p>{text(step.description, step.description_en)}</p>
+                  <SourceLink url={step.source_url}>
+                    {text('Resmî dayanak', 'Official basis')}
+                  </SourceLink>
+                </article>
+              ))}
+              <p>
+                {text('Son kayıt', 'Last saved')}: {timestamp(state.updated_at)} ·{' '}
+                {text('Kaydeden', 'Saved by')}: {state.updated_by || '—'}
+              </p>
+              <h3 className="font-semibold">{text('Resmî kaynaklar', 'Official sources')}</h3>
+              <ul className="space-y-2">
+                {state.sources.map((source) => (
+                  <li key={source.url}>
+                    <SourceLink url={source.url}>{source.title}</SourceLink>
+                  </li>
                 ))}
-            </div>
-        </div>
-      </div>
-
-      {/* Sidebar: Compliance Calendar */}
-      <div className="w-full lg:w-80 space-y-6">
-        <div className="bg-glass-dark p-6 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl">
-            <h4 className="font-bold flex items-center gap-2 mb-6 text-white">
-                <Calendar size={20} className="text-secondary" />
-                {t('incorporation.upcomingDeadlines')}
-            </h4>
-
-            <div className="space-y-4">
-                <div className="flex gap-4 items-start p-3 bg-white/5 rounded-2xl border border-white/5">
-                    <div className="w-12 text-center bg-background rounded-xl py-2 border border-white/10 shadow-inner">
-                        <div className="text-[10px] text-primary font-bold uppercase">Oct</div>
-                        <div className="text-lg font-bold text-white">26</div>
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-white">{t('incorporation.vatDeclaration')}</p>
-                        <p className="text-xs text-text-secondary mt-1">{t('incorporation.vatSub')}</p>
-                    </div>
-                </div>
-                 <div className="flex gap-4 items-start p-3 bg-white/5 rounded-2xl border border-white/5">
-                    <div className="w-12 text-center bg-background rounded-xl py-2 border border-white/10 shadow-inner">
-                        <div className="text-[10px] text-primary font-bold uppercase">Oct</div>
-                        <div className="text-lg font-bold text-white">31</div>
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-white">{t('incorporation.sgkPremiums')}</p>
-                        <p className="text-xs text-text-secondary mt-1">{t('incorporation.sgkSub')}</p>
-                    </div>
-                </div>
-            </div>
-
-            <button className="w-full mt-6 py-3 border border-white/10 rounded-xl text-sm font-medium text-text-secondary hover:bg-white/5 hover:text-white transition-colors flex items-center justify-center gap-2">
-                <Clock size={16} /> {t('incorporation.exportCalendar')}
-            </button>
-        </div>
-      </div>
-    </div>
+              </ul>
+            </>
+          )}
+        </>
+      )}
+    </section>
   );
-};
-
-export default IncorporationGuide;
+}

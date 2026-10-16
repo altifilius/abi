@@ -1,258 +1,314 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Sparkles, FileText, Cpu, RotateCcw } from 'lucide-react';
-import { sendIdeaChat, generateIdeaSummary, streamIdeaChat } from '../services/api';
-import { ChatMessage } from '../types';
-import { ABI_AVATAR_URL } from '../constants';
+import { useState } from 'react';
+import { useUnsavedChanges } from '../contexts/NavigationGuard';
+import { mergeProfileProposal, useIdeaChat } from '../hooks/useIdeaChat';
+import { type ProjectSave, useProjectDraft } from '../hooks/useProjectState';
 import { useI18n } from '../i18n';
+import { errorMessage } from '../services/api';
+import type { Profile, Project, Usage, Workspace } from '../types';
+import BudgetEditor from './BudgetEditor';
+import { ProfileFields } from './ProfileScreen';
 
-interface IdeaAgentProps {
-  onProjectCreate: (desc: string) => void;
-  projectTitle?: string;
-  projectDescription?: string;
-}
-
-const IdeaAgent: React.FC<IdeaAgentProps> = ({ onProjectCreate, projectTitle, projectDescription }) => {
-  const { t, language } = useI18n();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      text: t('ideaAgent.welcome'),
-      timestamp: Date.now()
-    }
-  ]);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [lastPayload, setLastPayload] = useState<ChatMessage[] | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const getErrorMessage = (error: unknown) => {
-    if (error instanceof Error && error.message) return error.message;
-    return t('common.genericError');
-  };
-
-  const projectContext = [projectTitle, projectDescription].filter(Boolean).join(' - ') || undefined;
-
-  const updateMessageText = (id: string, text: string) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, text } : m));
-  };
-
-  const removeMessageById = (id: string) => {
-    setMessages(prev => prev.filter(m => m.id !== id));
-  };
-
-  const appendModelPlaceholder = (id: string) => {
-    setMessages(prev => [
-      ...prev,
-      {
-        id,
-        role: 'model',
-        text: '',
-        timestamp: Date.now()
-      }
-    ]);
-  };
-
-  const runChatWithHistory = async (history: ChatMessage[]) => {
-    const placeholderId = `model-${Date.now()}`;
-    appendModelPlaceholder(placeholderId);
-    try {
-      // Try streaming first
-      await streamIdeaChat(
-        history,
-        { language, projectContext },
-        (partial) => updateMessageText(placeholderId, partial)
-      );
-    } catch (streamErr) {
-      console.warn("Streaming not available, falling back", streamErr);
-      // Fallback to non-streaming
-      try {
-        const responseText = await sendIdeaChat(history, { language, projectContext });
-        updateMessageText(placeholderId, responseText);
-      } catch (error) {
-        removeMessageById(placeholderId);
-        throw error;
-      }
-    }
-  };
-
-  const handleSend = async () => {
-    if (!inputText.trim()) {
-      setActionError(t('ideaAgent.error.emptyMessage'));
-      return;
-    }
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: inputText,
-      timestamp: Date.now()
-    };
-
-    const history = [...messages, userMsg];
-
-    setMessages(prev => [...prev, userMsg]);
-    setLastPayload(history);
-    setInputText('');
-    setIsTyping(true);
-    setActionError(null);
-
-    try {
-      await runChatWithHistory(history);
-    } catch (error) {
-      console.error("Chat Error", error);
-      setActionError(getErrorMessage(error));
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  const handleGenerateSummary = async () => {
-    if (isGeneratingSummary) return;
-    if (messages.length <= 1) {
-      setActionError(t('ideaAgent.error.needConversation'));
-      return;
-    }
-
-    setActionError(null);
-    setIsTyping(true);
-    setIsGeneratingSummary(true);
-
-    try {
-      const summary = await generateIdeaSummary(messages, { language, projectContext });
-      
-      const summaryMsg: ChatMessage = {
-          id: 'summary',
-          role: 'model',
-          text: `${t('ideaAgent.summaryIntro')}\n\n${summary}`,
-          timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, summaryMsg]);
-      onProjectCreate(summary);
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-    } finally {
-      setIsTyping(false);
-      setIsGeneratingSummary(false);
-    }
-  };
-
+function ProposalReview({
+  project,
+  proposal,
+  save,
+  discard,
+  readOnly,
+  pro,
+}: {
+  project: Project;
+  proposal: { profile: Profile; profile_revision: number };
+  save: ProjectSave;
+  discard: () => void;
+  readOnly: boolean;
+  pro: boolean;
+}) {
+  const { text } = useI18n();
+  const state = useProjectDraft(project, mergeProfileProposal(project.profile, proposal.profile));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+  const stale = proposal.profile_revision !== project.revision && !saved;
   return (
-    <div className="flex flex-col h-full bg-glass-dark rounded-3xl shadow-glass border border-white/10 overflow-hidden backdrop-blur-xl">
-      {/* Header */}
-      <div className="p-4 border-b border-white/10 bg-white/5 flex items-center gap-3">
-           <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary shadow-glow-primary overflow-hidden">
-                <img src={ABI_AVATAR_URL} alt="Abi" className="w-full h-full object-cover" />
-           </div>
-           <div>
-               <h3 className="text-white font-semibold">{t('ideaAgent.headerTitle')}</h3>
-               <p className="text-xs text-text-secondary">{t('ideaAgent.headerSubtitle')}</p>
-           </div>
+    <section className="panel stack">
+      <h2>{text('Profil önerisini düzenleyin', 'Edit the proposed profile')}</h2>
+      <p>
+        {text(
+          'AI önerisi henüz kayıtlı değildir. Bilgileri düzeltin, önce kaydedin, ardından kayıtlı revizyonu onaylayın. Mevcut manuel bütçe ve ek bilgiler korunur.',
+          'The AI proposal is not saved. Correct the facts, save first, then confirm the saved revision. Existing manual budget and additional facts are preserved.',
+        )}
+      </p>
+      {(stale || state.conflict) && (
+        <p className="error" role="alert">
+          {text(
+            'Proje değişti. Bu öneriyle eski revizyonun üzerine yazılamaz; öneriyi atıp güncel profilden yeni öneri alın.',
+            'The project changed. This proposal cannot overwrite the newer revision; discard it and generate a new proposal from the current profile.',
+          )}
+        </p>
+      )}
+      <ProfileFields
+        profile={state.draft.profile}
+        disabled={readOnly || busy}
+        onChange={(profile) => state.setDraft({ ...state.draft, profile })}
+      />
+      {pro && state.draft.profile.budget && (
+        <BudgetEditor
+          mode="project"
+          value={state.draft.profile.budget}
+          disabled={readOnly || busy}
+          onChange={(budget) =>
+            state.setDraft({ ...state.draft, profile: { ...state.draft.profile, budget } })
+          }
+        />
+      )}
+      <div className="actions">
+        {!readOnly && (
+          <>
+            <button
+              disabled={busy || stale || state.conflict || !state.dirty}
+              onClick={async () => {
+                setBusy(true);
+                setError('');
+                try {
+                  const value = await save({ profile: state.draft.profile }, state.base.revision);
+                  state.accept(value);
+                  setSaved(true);
+                } catch (error) {
+                  setError(errorMessage(error));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {text('Düzeltilmiş öneriyi kaydet', 'Save corrected proposal')}
+            </button>
+            <button
+              disabled={
+                busy ||
+                state.dirty ||
+                stale ||
+                state.conflict ||
+                project.confirmed_revision === project.revision
+              }
+              onClick={async () => {
+                if (state.dirty || stale || busy) return;
+                setBusy(true);
+                setError('');
+                try {
+                  await save({ confirm_profile: true }, project.revision);
+                  discard();
+                } catch (error) {
+                  setError(errorMessage(error));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {text('Kayıtlı profili onayla', 'Confirm saved profile')}
+            </button>
+          </>
+        )}
+        <button
+          disabled={busy}
+          onClick={() => {
+            state.discard();
+            discard();
+          }}
+        >
+          {text('Öneriyi at', 'Discard proposal')}
+        </button>
       </div>
-
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-          >
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 border overflow-hidden ${
-              msg.role === 'model' 
-                ? 'bg-surface text-primary border-primary/30 shadow-glow-primary' 
-                : 'bg-secondary/20 text-secondary border-secondary/30'
-            }`}>
-              {msg.role === 'model' ? (
-                <img src={ABI_AVATAR_URL} alt="Abi" className="w-full h-full object-cover" />
-              ) : (
-                <User size={20} />
-              )}
-            </div>
-            
-            <div className={`max-w-[80%] p-5 rounded-3xl text-sm leading-relaxed whitespace-pre-wrap backdrop-blur-md shadow-lg ${
-              msg.role === 'model' 
-                ? 'bg-white/5 border border-white/10 text-white rounded-tl-none' 
-                : 'bg-gradient-to-br from-primary/80 to-blue-600/80 text-white border border-white/20 rounded-tr-none'
-            }`}>
-              {msg.text}
-            </div>
-          </div>
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+export default function IdeaAgent({
+  project,
+  workspace,
+  usage,
+  reload,
+  onUsage,
+  save,
+  readOnly = false,
+}: {
+  project: Project;
+  workspace: Workspace;
+  usage: Usage | null;
+  reload: () => Promise<void>;
+  onUsage: () => void | Promise<void>;
+  save: ProjectSave;
+  readOnly?: boolean;
+}) {
+  const { text, language } = useI18n();
+  const chat = useIdeaChat(project, language, reload, onUsage);
+  const [refreshError, setRefreshError] = useState('');
+  useUnsavedChanges(!readOnly && (!!chat.input.trim() || chat.busy), () => chat.setInput(''));
+  return (
+    <div className="stack">
+      <h2>{text('Proje sohbeti', 'Project conversation')}</h2>
+      <p>
+        {text(
+          'Bu bir proje geliştirme yardımcısıdır, fon kararı değildir. Profil önerileri düzenlenip kaydedilmeden mevcut profili değiştirmez.',
+          'This is a project development assistant, not a grant decision. Proposals do not change the existing profile until reviewed and saved.',
+        )}
+      </p>
+      <p className="notice">
+        {text('AI politikası', 'AI policy')}:{' '}
+        {workspace.ai_policy === 'local'
+          ? text('Yerel / kendi sunucunuz', 'Local / self-hosted')
+          : text('Harici sağlayıcı', 'External provider')}{' '}
+        · {text('Aylık kalan sohbet / yazım', 'Monthly remaining chat / writing')}:{' '}
+        {usage ? `${usage.chat.remaining} / ${usage.write.remaining}` : '—'}
+      </p>
+      {readOnly && (
+        <p className="notice">
+          {text(
+            'Salt okunur: kayıtlı konuşmayı görüntüleyebilirsiniz.',
+            'Read-only: you can view the saved conversation.',
+          )}
+        </p>
+      )}
+      <section
+        className="panel conversation"
+        aria-label={text('Kayıtlı konuşma', 'Saved conversation')}
+        aria-live="polite"
+      >
+        {chat.messages.length === 0 && (
+          <p>{text('Henüz kayıtlı mesaj yok.', 'No saved messages yet.')}</p>
+        )}
+        {chat.messages.map((message) => (
+          <article key={message.id} className={`message ${message.role}`}>
+            <strong>{message.role === 'user' ? text('Siz', 'You') : 'Abi'}</strong>
+            <p>{message.text}</p>
+            <small>
+              {new Date(message.created_at).toLocaleString(language === 'tr' ? 'tr-TR' : 'en-GB', {
+                timeZone: 'UTC',
+              })}{' '}
+              UTC
+            </small>
+          </article>
         ))}
-        {isTyping && (
-           <div className="flex items-center gap-2 text-primary text-xs ml-16 animate-pulse">
-             <Sparkles size={14} /> {t('ideaAgent.isThinking')}
-           </div>
-        )}
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Input Area */}
-      <div className="p-6 bg-glass-dark border-t border-white/10">
-        {messages.length > 3 && (
-            <div className="mb-4 flex justify-center">
-                 <button 
-                  onClick={handleGenerateSummary}
-                  disabled={isTyping || isGeneratingSummary}
-                  className="flex items-center gap-2 bg-secondary/20 hover:bg-secondary/30 text-secondary px-6 py-2 rounded-full text-xs font-semibold transition-all border border-secondary/50 shadow-glow-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isGeneratingSummary ? <Cpu size={14} className="animate-spin" /> : <FileText size={14} />}
-                    {isGeneratingSummary ? t('ideaAgent.generatingSummary') : t('ideaAgent.generateOnePager')}
-                </button>
-            </div>
-        )}
-        {actionError && (
-          <div className="mb-3 text-sm text-red-200 bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-2xl flex items-center justify-between gap-3">
-            <span>{actionError}</span>
-            {lastPayload && (
-              <button
-                onClick={async () => {
-                  setActionError(null);
-                  setIsTyping(true);
-                  try {
-                    await runChatWithHistory(lastPayload);
-                  } catch (err) {
-                    setActionError(getErrorMessage(err));
-                  } finally {
-                    setIsTyping(false);
-                  }
-                }}
-                className="flex items-center gap-2 text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-full border border-white/20"
-              >
-                <RotateCcw size={14} /> Try again
-              </button>
-            )}
+      </section>
+      {!readOnly && (
+        <form
+          className="panel stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void chat.perform('chat');
+          }}
+        >
+          <label>
+            {text('Mesajınız', 'Your message')}
+            <textarea
+              rows={4}
+              maxLength={12000}
+              disabled={chat.busy}
+              value={chat.input}
+              onChange={(e) => chat.setInput(e.target.value)}
+            />
+          </label>
+          <small>{chat.input.length} / 12000</small>
+          <div className="actions">
+            <button
+              className="primary"
+              disabled={
+                chat.busy ||
+                chat.historyUncertain ||
+                !chat.input.trim() ||
+                usage?.chat.remaining === 0
+              }
+            >
+              {text('Gönder', 'Send')}
+            </button>
+            <button
+              type="button"
+              disabled={
+                chat.busy || !!chat.proposal || !!chat.input.trim() || usage?.write.remaining === 0
+              }
+              onClick={() => void chat.perform('write')}
+            >
+              {text(
+                'Kayıtlı profilden genel taslak yaz (1 yazım)',
+                'Write general draft from saved profile (1 writing credit)',
+              )}
+            </button>
+            <button
+              type="button"
+              disabled={
+                chat.busy || !!chat.proposal || !!chat.input.trim() || usage?.write.remaining === 0
+              }
+              onClick={() => void chat.perform('extract-profile')}
+            >
+              {text('Profil öner (1 yazım)', 'Propose profile (1 writing credit)')}
+            </button>
           </div>
-        )}
-        <div className="relative flex items-center gap-3">
-          <input
-            type="text"
-            className="flex-1 bg-white/5 text-white placeholder-text-secondary/50 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/50 border border-white/10 transition-all"
-            placeholder={t('ideaAgent.placeholder')}
-            value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              if (actionError) setActionError(null);
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            disabled={isTyping || isGeneratingSummary}
-          />
+          {chat.busy && (
+            <p role="status">
+              {text(
+                'AI işlemi devam ediyor; sağlayıcıya bağlı olarak birkaç dakika sürebilir. Sonuç gelene kadar yeni işlem başlatmayın.',
+                'The AI operation is still running; the provider may take several minutes. Do not start another operation before it finishes.',
+              )}
+            </p>
+          )}
+          {chat.committedFailure && (
+            <p className="notice">
+              {text(
+                'Mesajınız sunucuda kaydedildi ancak yanıt işlemi başarısız oldu. Kayıtlı konuşma yenilendi; aynı mesaj otomatik tekrar gönderilmedi.',
+                'Your message was saved on the server, but the reply failed. Saved history was refreshed; the message was not automatically sent again.',
+              )}
+            </p>
+          )}
+        </form>
+      )}
+      {chat.historyUncertain && (
+        <section className="notice">
+          <p>
+            {text(
+              'Kayıtlı konuşma doğrulanamadı. Aynı mesajı tekrar göndermeden önce geçmişi yenileyin.',
+              'Saved conversation could not be verified. Refresh history before sending the same message again.',
+            )}
+          </p>
           <button
-            onClick={handleSend}
-            disabled={!inputText.trim() || isTyping || isGeneratingSummary}
-            className="p-4 bg-primary text-background rounded-2xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-glow-primary"
+            disabled={chat.busy}
+            onClick={async () => {
+              setRefreshError('');
+              try {
+                await chat.refreshMessages();
+              } catch (error) {
+                setRefreshError(errorMessage(error));
+              }
+            }}
           >
-            <Send size={20} />
+            {text('Kayıtlı konuşmayı yenile', 'Refresh saved conversation')}
           </button>
-        </div>
-      </div>
+        </section>
+      )}
+      {chat.proposal && (
+        <ProposalReview
+          key={`${project.id}-${chat.proposal.profile_revision}`}
+          project={project}
+          proposal={chat.proposal}
+          save={save}
+          discard={() => chat.setProposal(null)}
+          readOnly={readOnly}
+          pro={workspace.plan === 'pro'}
+        />
+      )}
+      {(chat.error || refreshError) && (
+        <p role="alert" className="error">
+          {chat.error || refreshError}
+        </p>
+      )}
+      <p>
+        {text(
+          'Kredi bittiğinde manuel düzenleme ve PDF / DOCX indirme devam eder. Başarısız AI işlemleri kredi tüketmez.',
+          'Manual editing and PDF / DOCX exports remain available after quota. Failed AI operations consume no credits.',
+        )}
+      </p>
     </div>
   );
-};
-
-export default IdeaAgent;
+}

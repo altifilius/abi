@@ -1,126 +1,149 @@
-import { ChatMessage, FundMatch } from '../types';
+import type { Session } from '../types';
+import { validateApiResponse } from './contracts';
 
-const DEFAULT_API_BASE = '/api';
-const API_BASE = (import.meta.env.VITE_API_BASE || DEFAULT_API_BASE).replace(/\/$/, '');
-
-const toApiMessages = (messages: ChatMessage[]) =>
-  messages.map(({ role, text }) => ({
-    role,
-    text,
-  }));
-
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const raw = await response.text();
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed?.detail) detail = parsed.detail;
-    } catch {
-      if (raw) detail = raw;
-    }
-    throw new Error(detail || 'Request failed');
+const API_BASE = (import.meta.env?.VITE_API_BASE || '/api').replace(/\/$/, '');
+let csrfToken = '';
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number,
+    public readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
   }
-
-  const text = await response.text();
+}
+export function clearSession() {
+  csrfToken = '';
+}
+export async function getCsrf(signal?: AbortSignal): Promise<Session> {
+  const session = await apiRequest<Session>('/auth/session', { signal });
+  csrfToken = session.csrf_token;
+  return session;
+}
+async function responseError(response: Response): Promise<never> {
+  let message = `Request failed (${response.status})`;
+  let code: string | undefined;
   try {
-    return JSON.parse(text) as T;
+    const data = await response.json();
+    const detail = data.detail;
+    if (typeof detail === 'string') message = detail;
+    else if (Array.isArray(detail))
+      message = detail
+        .map(
+          (item: { loc?: string[]; msg?: string }) =>
+            `${(item.loc || []).filter((x) => x !== 'body').join('.')}: ${item.msg || 'Invalid value'}`,
+        )
+        .join('; ');
+    else if (detail && typeof detail.message === 'string') {
+      message = detail.message;
+      code = detail.code;
+    } else if (detail && typeof detail === 'object') {
+      code = typeof detail.code === 'string' ? detail.code : undefined;
+      const errors = Array.isArray(detail.errors)
+        ? detail.errors
+        : Array.isArray(data.errors)
+          ? data.errors
+          : [];
+      const messages = errors
+        .map((item: { message?: unknown; field?: unknown }) =>
+          typeof item.message === 'string'
+            ? `${typeof item.field === 'string' ? `${item.field}: ` : ''}${item.message}`
+            : '',
+        )
+        .filter(Boolean);
+      if (messages.length) message = messages.join('; ');
+      else if (code)
+        message =
+          code === 'stale_revision' || code === 'stale_project'
+            ? 'This project changed. Reload it before saving.'
+            : code.replaceAll('_', ' ');
+    } else if (Array.isArray(data.errors)) {
+      const messages = data.errors
+        .map((item: { message?: unknown; field?: unknown }) =>
+          typeof item.message === 'string'
+            ? `${typeof item.field === 'string' ? `${item.field}: ` : ''}${item.message}`
+            : '',
+        )
+        .filter(Boolean);
+      if (messages.length) message = messages.join('; ');
+    }
   } catch {
-    return {} as T;
+    /* Never display server HTML or submitted request bodies. */
   }
+  throw new ApiError(message, response.status, code);
 }
-
-export type IdeaChatOptions = {
-  language?: string;
-  projectContext?: string;
-};
-
-export async function sendIdeaChat(
-  messages: ChatMessage[],
-  options: IdeaChatOptions = {}
-): Promise<string> {
-  const data = await postJson<{ reply: string }>('/idea-chat', {
-    messages: toApiMessages(messages),
-    mode: 'chat',
-    language: options.language,
-    project_context: options.projectContext,
-  });
-  return data.reply;
-}
-
-export async function generateIdeaSummary(
-  messages: ChatMessage[],
-  options: IdeaChatOptions = {}
-): Promise<string> {
-  const data = await postJson<{ reply: string }>('/idea-chat', {
-    messages: toApiMessages(messages),
-    mode: 'summary',
-    language: options.language,
-    project_context: options.projectContext,
-  });
-  return data.reply;
-}
-
-export async function streamIdeaChat(
-  messages: ChatMessage[],
-  options: IdeaChatOptions,
-  onChunk: (chunk: string) => void
-): Promise<string> {
-  const response = await fetch(`${API_BASE}/idea-chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messages: toApiMessages(messages),
-      mode: 'chat',
-      language: options.language,
-      project_context: options.projectContext,
-      stream: true,
-    }),
-  });
-
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const data = await response.json();
-      if (data?.detail) detail = data.detail;
-    } catch {
-      detail = await response.text();
-    }
-    throw new Error(detail || 'Stream request failed');
+async function request(path: string, options: RequestInit = {}): Promise<Response> {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers);
+  if (
+    !['GET', 'HEAD', 'OPTIONS'].includes(method) &&
+    !['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password'].includes(
+      path,
+    )
+  ) {
+    if (!csrfToken) await getCsrf(options.signal || undefined);
+    headers.set('X-CSRF-Token', csrfToken);
   }
-
-  if (!response.body) {
-    throw new Error('Streaming not supported by the browser/response');
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let acc = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    if (chunk) {
-      acc += chunk;
-      onChunk(acc);
-    }
-  }
-  return acc;
-}
-
-export async function runFundMatcher(description: string): Promise<FundMatch[]> {
-  const data = await postJson<{ matches: FundMatch[] }>('/fund-matcher', {
-    description,
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: 'same-origin',
   });
-  return data.matches || [];
+  if (!response.ok) await responseError(response);
+  if (
+    response.status === 204 &&
+    ['/auth/change-password', '/auth/reset-password', '/auth/logout'].includes(path)
+  )
+    csrfToken = '';
+  return response;
+}
+export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await request(path, options);
+  if (response.status === 204) return undefined as T;
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new ApiError('Server returned invalid JSON', response.status, 'invalid_response');
+  }
+  try {
+    validateApiResponse(path, (options?.method || 'GET').toUpperCase(), value);
+  } catch {
+    throw new ApiError('Server returned an invalid record', response.status, 'invalid_response');
+  }
+  return value as T;
+}
+export async function api<T>(
+  path: string,
+  options: RequestInit & { json?: unknown } = {},
+): Promise<T> {
+  const { json, ...init } = options;
+  if (json !== undefined) {
+    const headers = new Headers(init.headers);
+    headers.set('Content-Type', 'application/json');
+    init.headers = headers;
+    init.body = JSON.stringify(json);
+  }
+  return apiRequest<T>(path, init);
+}
+export async function downloadFile(
+  path: string,
+  filename: string,
+  options?: RequestInit,
+): Promise<void> {
+  const response = await request(path, options);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.name !== 'AbortError') return error.message;
+  return '';
 }

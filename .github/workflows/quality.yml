@@ -1,0 +1,62 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [main, 'upgrade/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: abi_test
+          POSTGRES_PASSWORD: ci-isolated-password
+          POSTGRES_DB: abi_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U abi_test -d abi_test'
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://abi_test:ci-isolated-password@127.0.0.1:5432/abi_test
+      ABI_TEST_DATABASE_URL: postgresql+asyncpg://abi_test:ci-isolated-password@127.0.0.1:5432/abi_test
+      LOCAL_AI_BASE_URL: http://127.0.0.1:11435/v1
+      LOCAL_AI_API_KEY: ci-metadata-only-no-provider-calls
+      LOCAL_AI_CHAT_MODEL: ci-model
+      LOCAL_AI_IDEA_MODEL: ci-model
+      LOCAL_AI_EMBEDDING_MODEL: ci-embedding
+      PDF_FONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+      PDF_BOLD_FONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PDF and OCR runtime requirements
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur
+      - name: Locked frontend installation
+        run: bun install --frozen-lockfile
+      - name: Frontend quality gate
+        run: bun run check
+      - name: Locked backend installation
+        run: pip install -r backend/requirements.lock
+      - name: Explicit schema migrations
+        working-directory: backend
+        run: python -m alembic -c alembic.ini upgrade head
+      - name: Backend lint and PostgreSQL behavior tests
+        run: |
+          pip install ruff
+          ruff check backend
+          python -m unittest discover -s backend/tests -v
+      - name: Dependency and source security audits
+        run: |
+          bun audit
+          pip install pip-audit bandit
+          pip-audit -r backend/requirements.lock
+          bandit -r backend -x backend/tests,backend/alembic -f screen
