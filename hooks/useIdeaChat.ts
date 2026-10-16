@@ -1,194 +1,80 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { generateIdeaSummary, sendIdeaChat, streamIdeaChat } from '../services/api';
-import type { ChatMessage } from '../types';
-
-interface UseIdeaChatOptions {
-  welcomeMessage: string;
-  genericErrorMessage: string;
-  emptyMessageError: string;
-  needConversationError: string;
-  summaryIntro: string;
-  language?: string;
-  projectTitle?: string;
-  projectDescription?: string;
-  onProjectCreate: (desc: string) => void;
-}
-
-export function useIdeaChat(options: UseIdeaChatOptions) {
-  const {
-    welcomeMessage,
-    genericErrorMessage,
-    emptyMessageError,
-    needConversationError,
-    summaryIntro,
-    language,
-    projectTitle,
-    projectDescription,
-    onProjectCreate,
-  } = options;
-
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      text: welcomeMessage,
-      timestamp: Date.now(),
-    },
-  ]);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [lastPayload, setLastPayload] = useState<ChatMessage[] | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
+import { useEffect, useRef, useState } from 'react';
+import type { Language } from '../i18n';
+import { api, errorMessage } from '../services/api';
+import type { ChatMessage, Profile, Project } from '../types';
+export function useIdeaChat(
+  project: Project,
+  language: Language,
+  onChange: () => Promise<void>,
+  onUsage: () => void,
+) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [proposal, setProposal] = useState<{ profile: Profile; profile_revision: number } | null>(
+    null,
+  );
+  const controller = useRef<AbortController | null>(null);
   useEffect(() => {
-    if (messages.length > 0) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages.length]);
-
-  const getErrorMessage = useCallback(
-    (error: unknown) => {
-      if (error instanceof Error && error.message) return error.message;
-      return genericErrorMessage;
-    },
-    [genericErrorMessage],
-  );
-
-  const projectContext =
-    [projectTitle, projectDescription].filter(Boolean).join(' - ') || undefined;
-
-  const updateMessageText = useCallback((id: string, text: string) => {
-    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text } : m)));
-  }, []);
-
-  const removeMessageById = useCallback((id: string) => {
-    setMessages((prev) => prev.filter((m) => m.id !== id));
-  }, []);
-
-  const runChatWithHistory = useCallback(
-    async (history: ChatMessage[]) => {
-      const placeholderId = `model-${Date.now()}`;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: placeholderId,
-          role: 'model',
-          text: '',
-          timestamp: Date.now(),
-        },
-      ]);
-      try {
-        await streamIdeaChat(history, { language, projectContext }, (partial) =>
-          updateMessageText(placeholderId, partial),
+    const active = new AbortController();
+    controller.current = active;
+    setMessages([]);
+    setInput('');
+    setBusy(false);
+    setError('');
+    setProposal(null);
+    api<{ messages: ChatMessage[] }>(`/projects/${project.id}/messages`, { signal: active.signal })
+      .then((data) => {
+        if (!active.signal.aborted) setMessages(data.messages);
+      })
+      .catch((error) => {
+        if (!active.signal.aborted) setError(errorMessage(error));
+      });
+    return () => active.abort();
+  }, [project.id]);
+  const perform = async (mode: 'chat' | 'write' | 'extract-profile') => {
+    const active = controller.current;
+    if (!active || active.signal.aborted || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (mode === 'chat') {
+        if (!input.trim()) return;
+        const data = await api<{ user_message: ChatMessage; message: ChatMessage }>(
+          `/projects/${project.id}/chat`,
+          { method: 'POST', json: { text: input, language }, signal: active.signal },
         );
-      } catch {
-        // Fallback to non-streaming
-        try {
-          const responseText = await sendIdeaChat(history, { language, projectContext });
-          updateMessageText(placeholderId, responseText);
-        } catch (error) {
-          removeMessageById(placeholderId);
-          throw error;
+        if (!active.signal.aborted) {
+          setMessages((items) => [...items, data.user_message, data.message]);
+          setInput('');
         }
+      } else if (mode === 'write') {
+        await api(`/projects/${project.id}/write`, {
+          method: 'POST',
+          json: {
+            language,
+            instruction:
+              language === 'tr'
+                ? 'Proje açıklamasını mevcut profil ve konuşmadan yaz. Bilinmeyenleri uydurma.'
+                : 'Write a project description from the profile and conversation. Do not invent unknown facts.',
+          },
+          signal: active.signal,
+        });
+        if (!active.signal.aborted) await onChange();
+      } else {
+        const data = await api<{ profile: Profile; profile_revision: number }>(
+          `/projects/${project.id}/extract-profile`,
+          { method: 'POST', json: { language }, signal: active.signal },
+        );
+        if (!active.signal.aborted) setProposal(data);
       }
-    },
-    [language, projectContext, removeMessageById, updateMessageText],
-  );
-
-  const handleSend = useCallback(async () => {
-    if (!inputText.trim()) {
-      setActionError(emptyMessageError);
-      return;
-    }
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: inputText,
-      timestamp: Date.now(),
-    };
-
-    const history = [...messages, userMsg];
-    setMessages((prev) => [...prev, userMsg]);
-    setLastPayload(history);
-    setInputText('');
-    setIsTyping(true);
-    setActionError(null);
-
-    try {
-      await runChatWithHistory(history);
+      if (!active.signal.aborted) onUsage();
     } catch (error) {
-      setActionError(getErrorMessage(error));
+      if (!active.signal.aborted) setError(errorMessage(error));
     } finally {
-      setIsTyping(false);
+      if (!active.signal.aborted) setBusy(false);
     }
-  }, [emptyMessageError, getErrorMessage, inputText, messages, runChatWithHistory]);
-
-  const handleRetry = useCallback(async () => {
-    if (!lastPayload) return;
-    setActionError(null);
-    setIsTyping(true);
-    try {
-      await runChatWithHistory(lastPayload);
-    } catch (err) {
-      setActionError(getErrorMessage(err));
-    } finally {
-      setIsTyping(false);
-    }
-  }, [getErrorMessage, lastPayload, runChatWithHistory]);
-
-  const handleGenerateSummary = useCallback(async () => {
-    if (isGeneratingSummary) return;
-    if (messages.length <= 1) {
-      setActionError(needConversationError);
-      return;
-    }
-
-    setActionError(null);
-    setIsTyping(true);
-    setIsGeneratingSummary(true);
-
-    try {
-      const summary = await generateIdeaSummary(messages, { language, projectContext });
-      const summaryMsg: ChatMessage = {
-        id: 'summary',
-        role: 'model',
-        text: `${summaryIntro}\n\n${summary}`,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, summaryMsg]);
-      onProjectCreate(summary);
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-    } finally {
-      setIsTyping(false);
-      setIsGeneratingSummary(false);
-    }
-  }, [
-    isGeneratingSummary,
-    messages,
-    needConversationError,
-    language,
-    projectContext,
-    summaryIntro,
-    onProjectCreate,
-    getErrorMessage,
-  ]);
-
-  return {
-    messages,
-    inputText,
-    setInputText,
-    isTyping,
-    isGeneratingSummary,
-    actionError,
-    setActionError,
-    lastPayload,
-    chatEndRef,
-    handleSend,
-    handleRetry,
-    handleGenerateSummary,
   };
+  return { messages, input, setInput, busy, error, proposal, setProposal, perform };
 }

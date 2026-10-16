@@ -1,79 +1,67 @@
-import { describe, expect, it } from 'bun:test';
-import { FUNDS } from '../constants';
-import {
-  INITIAL_PROJECT,
-  mergePersistedProject,
-  stripFileFromDocuments,
-} from '../hooks/useProjectState';
-import type { ProjectDocument, ProjectPersistedState } from '../types';
+import { afterEach, describe, expect, it } from 'bun:test';
+import { loadPreferences, readLegacyImport, savePreferences } from '../services/persistence';
 
-describe('Project State and Persistence Invariants', () => {
-  it('strips File object before persistence', () => {
-    const fakeFile = new File(['dummy'], 'sample.pdf', { type: 'application/pdf' });
-    const docsWithFile: ProjectDocument[] = [
-      {
-        id: 'd1',
-        name: 'Form',
-        type: 'required',
-        status: 'verified',
-        file: fakeFile,
+const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+function installStorage(values: Record<string, string> = {}) {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values[key] ?? null,
+      setItem: (key: string, value: string) => {
+        values[key] = value;
       },
-    ];
-
-    const stripped = stripFileFromDocuments(docsWithFile);
-    expect(stripped.length).toBe(1);
-    expect(stripped[0].id).toBe('d1');
-    expect(stripped[0].status).toBe('verified');
-    expect('file' in stripped[0]).toBe(false);
+      removeItem: (key: string) => {
+        delete values[key];
+      },
+    },
   });
-
-  it('merges persisted state cleanly without mutating untouched initial properties', () => {
-    const merged = mergePersistedProject(INITIAL_PROJECT, {
-      version: 1,
-      description: 'Persisted 1-Pager summary',
-      matchedFunds: [
-        {
-          fundId: 'kosgeb-arge',
-          score: 90,
-          rationale: 'Good fit',
-          eligibilityStatus: 'eligible',
-        },
-      ],
-      documents: [
-        {
-          id: 'd1',
-          name: 'Project Information Form (AGY100)',
-          type: 'required',
-          status: 'verified',
-        },
-      ],
+  return values;
+}
+afterEach(() => {
+  if (previousStorage) Object.defineProperty(globalThis, 'localStorage', previousStorage);
+  else Reflect.deleteProperty(globalThis, 'localStorage');
+});
+describe('Browser/server persistence boundary', () => {
+  it('imports old names only and never trusts verified status or file objects', () => {
+    installStorage({
+      'abi.projectState': JSON.stringify({
+        version: 1,
+        description: 'Old draft',
+        documents: [
+          { name: 'report.pdf', status: 'verified', verified_by: 'fake', file: { secret: 'x' } },
+        ],
+        matchedFunds: [{ score: 100 }],
+      }),
     });
-
-    expect(merged.id).toBe(INITIAL_PROJECT.id);
-    expect(merged.title).toBe(INITIAL_PROJECT.title);
-    expect(merged.description).toBe('Persisted 1-Pager summary');
-    expect(merged.matchedFunds?.length).toBe(1);
-    expect(merged.documents[0].status).toBe('verified');
+    expect(readLegacyImport()).toEqual({
+      description: 'Old draft',
+      documents_metadata: [{ name: 'report.pdf' }],
+    });
   });
-
-  it('preserves initial project when persisted state is null or corrupt', () => {
-    const fromNull = mergePersistedProject(INITIAL_PROJECT, null);
-    expect(fromNull).toEqual(INITIAL_PROJECT);
-
-    const emptyState: ProjectPersistedState = { version: 1 };
-    const fromEmpty = mergePersistedProject(INITIAL_PROJECT, emptyState);
-    expect(fromEmpty.id).toBe(INITIAL_PROJECT.id);
+  it('does not automatically turn old state into server/project preferences', () => {
+    const values = installStorage({
+      'abi.projectState': JSON.stringify({ version: 1, description: 'Old draft' }),
+    });
+    expect(loadPreferences()).toEqual({});
+    expect(values['abi.preferences']).toBeUndefined();
   });
-
-  it('loads valid funds from centralized data/funds.json', () => {
-    expect(FUNDS.length).toBeGreaterThanOrEqual(4);
-    for (const fund of FUNDS) {
-      expect(fund.id).toBeDefined();
-      expect(fund.code).toBeDefined();
-      expect(fund.name).toBeDefined();
-      expect(['TUBITAK', 'KOSGEB', 'EU']).toContain(fund.institution);
-      expect(fund.maxBudget).toBeDefined();
-      expect(fund.supportRate).toBeDefined();
-    }
+  it('persists browser appearance and selection without private project content', () => {
+    const values = installStorage();
+    savePreferences({ language: 'tr', theme: 'dark', workspaceId: 'w', projectId: 'p' });
+    savePreferences({ tab: 'profile' });
+    expect(loadPreferences()).toEqual({
+      language: 'tr',
+      theme: 'dark',
+      workspaceId: 'w',
+      projectId: 'p',
+      tab: 'profile',
+    });
+    expect(values['abi.preferences']).not.toContain('description');
+  });
+  it('rejects malformed and unknown-version legacy state', () => {
+    installStorage({ 'abi.projectState': '{broken' });
+    expect(readLegacyImport()).toBeNull();
+    installStorage({ 'abi.projectState': JSON.stringify({ version: 5, description: 'x' }) });
+    expect(readLegacyImport()).toBeNull();
   });
 });

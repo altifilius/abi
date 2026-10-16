@@ -40,6 +40,9 @@ htmlcov/
 
 # Local ingestion inputs and generated data
 backend/*.pdf
+var/
+backups/
+*.tar.gz
 
 # Bun is the canonical package manager
 package-lock.json

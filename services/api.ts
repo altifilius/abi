@@ -1,211 +1,134 @@
-import type { ChatMessage, FundMatch } from '../types';
+import type { Session } from '../types';
 
-const DEFAULT_API_BASE = '/api';
-const API_BASE = (import.meta.env.VITE_API_BASE || DEFAULT_API_BASE).replace(/\/$/, '');
-
+const API_BASE = (import.meta.env?.VITE_API_BASE || '/api').replace(/\/$/, '');
+let csrfToken = '';
 export class ApiError extends Error {
-  readonly kind: 'http' | 'parse' | 'contract';
-  readonly status?: number;
-
-  constructor(message: string, kind: 'http' | 'parse' | 'contract', status?: number) {
+  constructor(
+    message: string,
+    public readonly status?: number,
+    public readonly code?: string,
+  ) {
     super(message);
     this.name = 'ApiError';
-    this.kind = kind;
-    this.status = status;
   }
 }
-
-const toApiMessages = (messages: ChatMessage[]) =>
-  messages.map(({ role, text }) => ({
-    role,
-    text,
-  }));
-
-const isObject = (val: unknown): val is Record<string, unknown> =>
-  typeof val === 'object' && val !== null && !Array.isArray(val);
-
-export function parseIdeaChatResponse(data: unknown): { reply: string } {
-  if (!isObject(data) || typeof data.reply !== 'string') {
-    throw new ApiError('Invalid idea-chat response: expected { reply: string }', 'contract');
-  }
-  return { reply: data.reply };
+export function clearSession() {
+  csrfToken = '';
 }
-
-export function parseFundMatch(data: unknown): FundMatch {
-  if (!isObject(data)) {
-    throw new ApiError('Invalid fund match item: expected an object', 'contract');
-  }
-  const { fundId, score, rationale, eligibilityStatus } = data;
-  if (typeof fundId !== 'string' || !fundId.trim()) {
-    throw new ApiError('Invalid fund match item: missing or invalid fundId', 'contract');
-  }
-  if (typeof score !== 'number' || Number.isNaN(score) || score < 0 || score > 100) {
-    throw new ApiError('Invalid fund match item: score must be between 0 and 100', 'contract');
-  }
-  if (typeof rationale !== 'string') {
-    throw new ApiError('Invalid fund match item: rationale must be a string', 'contract');
-  }
-  if (
-    eligibilityStatus !== 'eligible' &&
-    eligibilityStatus !== 'conditional' &&
-    eligibilityStatus !== 'ineligible'
-  ) {
-    throw new ApiError('Invalid fund match item: invalid eligibilityStatus', 'contract');
-  }
-  return {
-    fundId,
-    score,
-    rationale,
-    eligibilityStatus,
-  };
+export async function getCsrf(signal?: AbortSignal): Promise<Session> {
+  const session = await apiRequest<Session>('/auth/session', { signal });
+  csrfToken = session.csrf_token;
+  return session;
 }
-
-export function parseFundMatcherResponse(data: unknown): { matches: FundMatch[] } {
-  if (!isObject(data) || !Array.isArray(data.matches)) {
-    throw new ApiError(
-      'Invalid fund-matcher response: expected { matches: FundMatch[] }',
-      'contract',
-    );
-  }
-  return {
-    matches: data.matches.map(parseFundMatch),
-  };
-}
-
-async function postJson<T>(
-  path: string,
-  body: unknown,
-  validate: (data: unknown) => T,
-): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const raw = await response.text();
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed?.detail) {
-        detail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
-      }
-    } catch {
-      if (raw) detail = raw;
-    }
-    throw new ApiError(detail || 'Request failed', 'http', response.status);
-  }
-
-  const text = await response.text();
-  let json: unknown;
+async function responseError(response: Response): Promise<never> {
+  let message = `Request failed (${response.status})`;
+  let code: string | undefined;
   try {
-    json = JSON.parse(text);
+    const data = await response.json();
+    const detail = data.detail;
+    if (typeof detail === 'string') message = detail;
+    else if (Array.isArray(detail))
+      message = detail
+        .map(
+          (item: { loc?: string[]; msg?: string }) =>
+            `${(item.loc || []).filter((x) => x !== 'body').join('.')}: ${item.msg || 'Invalid value'}`,
+        )
+        .join('; ');
+    else if (detail && typeof detail.message === 'string') {
+      message = detail.message;
+      code = detail.code;
+    } else if (detail && typeof detail === 'object') {
+      code = typeof detail.code === 'string' ? detail.code : undefined;
+      const errors = Array.isArray(detail.errors)
+        ? detail.errors
+        : Array.isArray(data.errors)
+          ? data.errors
+          : [];
+      const messages = errors
+        .map((item: { message?: unknown; field?: unknown }) =>
+          typeof item.message === 'string'
+            ? `${typeof item.field === 'string' ? `${item.field}: ` : ''}${item.message}`
+            : '',
+        )
+        .filter(Boolean);
+      if (messages.length) message = messages.join('; ');
+      else if (code)
+        message =
+          code === 'stale_revision' || code === 'stale_project'
+            ? 'This project changed. Reload it before saving.'
+            : code.replaceAll('_', ' ');
+    } else if (Array.isArray(data.errors)) {
+      const messages = data.errors
+        .map((item: { message?: unknown; field?: unknown }) =>
+          typeof item.message === 'string'
+            ? `${typeof item.field === 'string' ? `${item.field}: ` : ''}${item.message}`
+            : '',
+        )
+        .filter(Boolean);
+      if (messages.length) message = messages.join('; ');
+    }
   } catch {
-    throw new ApiError('Server returned invalid JSON', 'parse', response.status);
+    /* Never display server HTML or submitted request bodies. */
   }
-
-  return validate(json);
+  throw new ApiError(message, response.status, code);
 }
-export type IdeaChatOptions = {
-  language?: string;
-  projectContext?: string;
-};
-
-export async function sendIdeaChat(
-  messages: ChatMessage[],
-  options: IdeaChatOptions = {},
-): Promise<string> {
-  const data = await postJson(
-    '/idea-chat',
-    {
-      messages: toApiMessages(messages),
-      mode: 'chat',
-      language: options.language,
-      project_context: options.projectContext,
-    },
-    parseIdeaChatResponse,
-  );
-  return data.reply;
-}
-
-export async function generateIdeaSummary(
-  messages: ChatMessage[],
-  options: IdeaChatOptions = {},
-): Promise<string> {
-  const data = await postJson(
-    '/idea-chat',
-    {
-      messages: toApiMessages(messages),
-      mode: 'summary',
-      language: options.language,
-      project_context: options.projectContext,
-    },
-    parseIdeaChatResponse,
-  );
-  return data.reply;
-}
-
-export async function streamIdeaChat(
-  messages: ChatMessage[],
-  options: IdeaChatOptions,
-  onChunk: (chunk: string) => void,
-): Promise<string> {
-  const response = await fetch(`${API_BASE}/idea-chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messages: toApiMessages(messages),
-      mode: 'chat',
-      language: options.language,
-      project_context: options.projectContext,
-      stream: true,
-    }),
+async function request(path: string, options: RequestInit = {}): Promise<Response> {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers);
+  if (
+    !['GET', 'HEAD', 'OPTIONS'].includes(method) &&
+    !['/auth/login', '/auth/register'].includes(path)
+  ) {
+    if (!csrfToken) await getCsrf(options.signal || undefined);
+    headers.set('X-CSRF-Token', csrfToken);
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: 'same-origin',
   });
-
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const data = await response.json();
-      if (data?.detail) {
-        detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
-      }
-    } catch {
-      detail = await response.text();
-    }
-    throw new ApiError(detail || 'Stream request failed', 'http', response.status);
-  }
-
-  if (!response.body) {
-    throw new Error('Streaming not supported by the browser/response');
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let acc = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    if (chunk) {
-      acc += chunk;
-      onChunk(acc);
-    }
-  }
-  return acc;
+  if (!response.ok) await responseError(response);
+  return response;
 }
-
-export async function runFundMatcher(description: string): Promise<FundMatch[]> {
-  const data = await postJson(
-    '/fund-matcher',
-    {
-      description,
-    },
-    parseFundMatcherResponse,
-  );
-  return data.matches;
+export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await request(path, options);
+  if (response.status === 204) return undefined as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new ApiError('Server returned invalid JSON', response.status, 'invalid_response');
+  }
+}
+export async function api<T>(
+  path: string,
+  options: RequestInit & { json?: unknown } = {},
+): Promise<T> {
+  const { json, ...init } = options;
+  if (json !== undefined) {
+    const headers = new Headers(init.headers);
+    headers.set('Content-Type', 'application/json');
+    init.headers = headers;
+    init.body = JSON.stringify(json);
+  }
+  return apiRequest<T>(path, init);
+}
+export async function downloadFile(
+  path: string,
+  filename: string,
+  options?: RequestInit,
+): Promise<void> {
+  const response = await request(path, options);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.name !== 'AbortError') return error.message;
+  return '';
 }

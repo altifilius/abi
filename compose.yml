@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    ports:
+      - "127.0.0.1:15472:5432"
+    environment:
+      POSTGRES_USER: abi_upgrade
+      POSTGRES_PASSWORD: ${ABI_DATABASE_PASSWORD:?Set ABI_DATABASE_PASSWORD}
+      POSTGRES_DB: abi_upgrade
+    volumes:
+      - database:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abi_upgrade -d abi_upgrade"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  local-ai:
+    image: ollama/ollama:0.40.3
+    ports:
+      - "127.0.0.1:11435:11434"
+    environment:
+      OLLAMA_NO_CLOUD: "true"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes:
+      - models:/root/.ollama
+    restart: unless-stopped
+  local-mail:
+    image: axllent/mailpit:v1.28
+    profiles: [development]
+    ports:
+      - "127.0.0.1:11025:1025"
+      - "127.0.0.1:18025:8025"
+    volumes:
+      - mail:/data
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    restart: unless-stopped
+volumes:
+  database:
+  models:
+  mail:

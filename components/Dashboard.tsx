@@ -1,237 +1,156 @@
-import { Bell, FileText, ShieldCheck, TrendingUp } from 'lucide-react';
-import type React from 'react';
-import { FUNDS } from '../constants';
+import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
-import type { Project } from '../types';
-import { ProgressWidget } from './dashboard/ProgressWidget';
-import { QuickActions } from './dashboard/QuickActions';
-import { RecentActivity } from './dashboard/RecentActivity';
-import { UpcomingSchedule } from './dashboard/UpcomingSchedule';
+import { api, errorMessage } from '../services/api';
+import type { Project, Usage, Workspace } from '../types';
 
-interface DashboardProps {
-  project: Project;
-  onNavigate: (tab: string) => void;
+interface Event {
+  id: string;
+  event_type: string;
+  created_at: string;
+  project_id?: string;
 }
-
-const Dashboard: React.FC<DashboardProps> = ({ project, onNavigate }) => {
-  const { t } = useI18n();
-
-  const hasDescription = !!project.description;
-  const hasMatches = project.matchedFunds && project.matchedFunds.length > 0;
-  const missingDocs = project.documents.filter((d) => d.status === 'missing').length;
-  const totalDocs = project.documents.length;
-  const docProgress = totalDocs > 0 ? Math.round(((totalDocs - missingDocs) / totalDocs) * 100) : 0;
-
-  let overallProgress = 0;
-  if (hasDescription) overallProgress += 20;
-  if (hasMatches) overallProgress += 30;
-  overallProgress += Math.round(docProgress * 0.5);
-
-  const sortedMatches =
-    project.matchedFunds && project.matchedFunds.length > 0
-      ? [...project.matchedFunds].sort((a, b) => b.score - a.score)
-      : [];
-  const topMatch = sortedMatches[0];
-  const topFund = topMatch ? FUNDS.find((f) => f.id === topMatch.fundId) : undefined;
-  const potentialFunding = topFund ? topFund.maxBudget : '—';
-  const potentialFundingSub = topFund
-    ? `${topFund.name} (${topMatch.score}%)`
-    : t('dashboard.fundingPotentialSub');
-
-  const quickActionsList = [
-    {
-      tab: 'documents',
-      icon: 'folder' as const,
-      color: 'primary' as const,
-      title: t('dashboard.documentVaultTitle'),
-      subtitle: t('dashboard.documentVaultSub'),
-    },
-    {
-      tab: 'idea-agent',
-      icon: 'support' as const,
-      color: 'primary' as const,
-      title: t('dashboard.getSupportTitle'),
-      subtitle: t('dashboard.getSupportSub'),
-    },
-    {
-      tab: 'fund-matcher',
-      icon: 'calculator' as const,
-      color: 'primary' as const,
-      title: t('dashboard.budgetTitle'),
-      subtitle: t('dashboard.budgetSub'),
-    },
-    {
-      tab: 'idea-agent',
-      icon: 'plus' as const,
-      color: 'secondary' as const,
-      title: t('dashboard.newIdeaTitle'),
-      subtitle: t('dashboard.newIdeaSub'),
-    },
-    {
-      tab: 'fund-matcher',
-      icon: 'trending' as const,
-      color: 'secondary' as const,
-      title: t('dashboard.eligibilityTitle'),
-      subtitle: t('dashboard.eligibilitySub'),
-    },
-    {
-      tab: 'incorporation',
-      icon: 'activity' as const,
-      color: 'secondary' as const,
-      title: t('dashboard.companySetupTitle'),
-      subtitle: t('dashboard.companySetupSub'),
-    },
-    {
-      tab: 'incorporation',
-      icon: 'checklist' as const,
-      color: 'primary' as const,
-      title: t('dashboard.registrationChecklistTitle'),
-      subtitle: t('dashboard.registrationChecklistSub'),
-    },
-  ];
-
-  const scheduleItems = [
-    {
-      month: 'DEC',
-      day: '21',
-      title: t('dashboard.schedule1Title'),
-      subtitle: t('dashboard.schedule1Sub'),
-      isHighlighted: true,
-    },
-    {
-      month: 'JAN',
-      day: '05',
-      title: t('dashboard.schedule2Title'),
-      subtitle: t('dashboard.schedule2Sub'),
-    },
-    {
-      month: 'JAN',
-      day: '12',
-      title: t('dashboard.schedule3Title'),
-      subtitle: t('dashboard.schedule3Sub'),
-    },
-  ];
-
-  const recentActivities = [
-    {
-      icon: 'folder' as const,
-      title: t('dashboard.activityDocUpdateTitle'),
-      subtitle: t('dashboard.activityDocUpdateSub'),
-      time: t('dashboard.activityDocUpdateTime'),
-    },
-    {
-      icon: 'shield' as const,
-      title: t('dashboard.activityEligibilityTitle'),
-      subtitle: t('dashboard.activityEligibilitySub'),
-      time: t('dashboard.activityEligibilityTime'),
-    },
-    {
-      icon: 'file' as const,
-      title: t('dashboard.activityReviewTitle'),
-      subtitle: t('dashboard.activityReviewSub'),
-      time: t('dashboard.activityReviewTime'),
-    },
-  ];
-
+export default function Dashboard({
+  project,
+  projects,
+  workspace,
+  usage,
+  onNavigate,
+}: {
+  project: Project | null;
+  projects: Project[];
+  workspace: Workspace;
+  usage: Usage | null;
+  onNavigate: (tab: string) => void;
+}) {
+  const { text } = useI18n();
+  const [activity, setActivity] = useState<Event[]>([]);
+  const [counts, setCounts] = useState<{
+    documents: number;
+    applications: number;
+    tasks: number;
+  } | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const active = new AbortController();
+    setActivity([]);
+    setCounts(null);
+    setError('');
+    api<Event[]>(`/workspaces/${workspace.id}/activity`, { signal: active.signal })
+      .then((value) => {
+        if (!active.signal.aborted) setActivity(value);
+      })
+      .catch((error) => {
+        if (!active.signal.aborted) setError(errorMessage(error));
+      });
+    if (project) {
+      const paths =
+        workspace.plan === 'pro' ? ['documents', 'applications', 'tasks'] : ['documents'];
+      Promise.all(
+        paths.map((path) =>
+          api<unknown[]>(`/projects/${project.id}/${path}`, { signal: active.signal }),
+        ),
+      )
+        .then((values) => {
+          if (!active.signal.aborted)
+            setCounts({
+              documents: values[0]?.length || 0,
+              applications: values[1]?.length || 0,
+              tasks: values[2]?.length || 0,
+            });
+        })
+        .catch((error) => {
+          if (!active.signal.aborted) setError(errorMessage(error));
+        });
+    }
+    return () => active.abort();
+  }, [workspace.id, workspace.plan, project]);
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full pb-6">
-      <div className="lg:col-span-2 grid grid-rows-[auto_auto_1fr] gap-4">
-        {/* Header */}
-        <header className="bg-glass-dark p-8 rounded-3xl shadow-glass backdrop-blur-xl border border-white/10 flex items-center justify-between bg-iridescent relative overflow-hidden group">
-          <div className="relative z-10 flex flex-col justify-center">
-            <h1 className="text-4xl font-bold text-white mb-2">ScaleUp Inc.</h1>
-            <p className="text-text-secondary">{t('dashboard.welcome')}</p>
-          </div>
-          <div className="relative z-10 text-right flex flex-col items-end">
-            <h3 className="text-lg font-medium text-text-secondary mb-2">
-              {t('dashboard.nextSubmission')}
-            </h3>
-            <div className="flex items-baseline gap-3">
-              <span
-                className="text-7xl font-bold text-primary"
-                style={{ textShadow: '0 0 12px rgba(0, 245, 212, 0.6)' }}
-              >
-                15
-              </span>
-              <span className="text-3xl font-semibold text-primary/80">{t('dashboard.days')}</span>
-            </div>
-            <p className="text-text-secondary mt-1">{t('dashboard.nextProgram')}</p>
-          </div>
-        </header>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ProgressWidget
-            title={t('dashboard.dynamicProgress')}
-            overallProgress={overallProgress}
-            completedText={t('dashboard.completed')}
-            milestonesText={t('dashboard.milestones')}
-            nextTaskText={t('dashboard.nextTask')}
-          />
-
-          {/* Funding Potential Widget */}
-          <div className="bg-glass-dark p-6 rounded-2xl shadow-glass backdrop-blur-xl border border-white/10 flex flex-col justify-center items-center text-center hover:border-secondary/30 transition-all">
-            <h3 className="text-sm font-medium text-text-secondary mb-3">
-              {t('dashboard.fundingPotential')}
-            </h3>
-            <TrendingUp
-              size={48}
-              className="text-primary mb-2 icon-glow"
-              style={{ '--glow-color': '#00F5D4' } as React.CSSProperties}
-            />
-            <p className="text-3xl font-bold text-white">{potentialFunding}</p>
-            <p className="text-xs text-text-secondary mt-1">{potentialFundingSub}</p>
-          </div>
-
-          {/* Notifications Widget */}
-          <div className="bg-glass-dark p-6 rounded-2xl shadow-glass backdrop-blur-xl border border-white/10 flex flex-col justify-between">
-            <h3 className="text-sm font-medium text-text-secondary mb-4 flex items-center gap-2">
-              <Bell size={16} className="text-white" /> {t('dashboard.notifications')}
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                  <ShieldCheck size={16} style={{ fontVariationSettings: "'FILL' 1" }} />
-                </div>
-                <p className="text-xs text-text-secondary">
-                  <span className="font-semibold text-white">
-                    {t('dashboard.notificationGrant')}
-                  </span>
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-secondary/10 text-secondary flex items-center justify-center flex-shrink-0">
-                  <FileText size={16} />
-                </div>
-                <p className="text-xs text-text-secondary">
-                  <span className="font-semibold text-white">{t('dashboard.notificationDoc')}</span>
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => onNavigate('documents')}
-              className="text-xs text-primary mt-4 text-left hover:underline"
-            >
-              {t('dashboard.viewAll')}
-            </button>
-          </div>
+    <div className="stack">
+      <h1>{text('Çalışma alanı özeti', 'Workspace overview')}</h1>
+      <p>
+        {workspace.name} · {workspace.country} · {workspace.plan.toUpperCase()} · {workspace.role}
+      </p>
+      <div className="stats">
+        <section className="panel">
+          <strong>{projects.length}</strong>
+          <span>{text('Proje', 'Projects')}</span>
+        </section>
+        <section className="panel">
+          <strong>{counts?.documents ?? '—'}</strong>
+          <span>{text('Seçili proje belgeleri', 'Selected project documents')}</span>
+        </section>
+        <section className="panel">
+          <strong>{workspace.plan === 'pro' ? (counts?.applications ?? '—') : 'Pro'}</strong>
+          <span>{text('Başvurular', 'Applications')}</span>
+        </section>
+        <section className="panel">
+          <strong>{workspace.plan === 'pro' ? (counts?.tasks ?? '—') : 'Pro'}</strong>
+          <span>{text('Görevler', 'Tasks')}</span>
+        </section>
+      </div>
+      {usage && (
+        <section className="panel">
+          <h2>
+            {usage.scope === 'user'
+              ? text(
+                  'Kullanıcı genelinde aylık krediler',
+                  'Monthly credits across all your Free workspaces',
+                )
+              : text('Paylaşılan aylık krediler', 'Shared monthly credits')}{' '}
+            · {usage.month} UTC
+          </h2>
+          <p>
+            {text('Sohbet kullanımı', 'Chat usage')}: {usage.chat.used} / {usage.chat.limit} ·{' '}
+            {text('Kalan', 'Remaining')}: {usage.chat.remaining}
+          </p>
+          <p>
+            {text('Yazım kullanımı', 'Writing usage')}: {usage.write.used} / {usage.write.limit} ·{' '}
+            {text('Kalan', 'Remaining')}: {usage.write.remaining}
+          </p>
+          <p>
+            {text(
+              'Pro en fazla 3 üye (sahip dahil). Otomatik aşım veya etkin ödeme yok.',
+              'Pro supports up to 3 members including the owner. No automatic overage or active billing.',
+            )}
+          </p>
+        </section>
+      )}
+      <section className="panel">
+        <h2>{text('Sıradaki adım', 'Next step')}</h2>
+        <div className="actions">
+          <button onClick={() => onNavigate('projects')}>
+            {text('Proje oluştur / seç', 'Create / select project')}
+          </button>
+          <button disabled={!project} onClick={() => onNavigate('profile')}>
+            {text('Profili düzenle ve onayla', 'Edit and confirm profile')}
+          </button>
+          <button disabled={!project} onClick={() => onNavigate('draft')}>
+            {text('Ücretsiz taslak indir', 'Download free draft')}
+          </button>
+          <button onClick={() => onNavigate('funding')}>
+            {text('Resmî fonları keşfet', 'Discover official funding')}
+          </button>
         </div>
-
-        {/* Quick Actions */}
-        <QuickActions
-          title={t('dashboard.quickActions')}
-          onNavigate={onNavigate}
-          actions={quickActionsList}
-        />
-      </div>
-
-      {/* Right Sidebar Column */}
-      <div className="lg:col-span-1 grid grid-rows-2 gap-4">
-        <UpcomingSchedule title={t('dashboard.upcomingSchedule')} items={scheduleItems} />
-        <RecentActivity title={t('dashboard.recentActivity')} items={recentActivities} />
-      </div>
+      </section>
+      <section className="panel">
+        <h2>{text('Gerçek etkinlik geçmişi', 'Actual activity history')}</h2>
+        {activity.length === 0 && (
+          <p>{text('Henüz kayıtlı etkinlik yok.', 'No recorded activity yet.')}</p>
+        )}
+        <ul className="activity">
+          {activity.map((event) => (
+            <li key={event.id}>
+              <span>{event.event_type}</span>
+              <time dateTime={event.created_at}>{new Date(event.created_at).toLocaleString()}</time>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
     </div>
   );
-};
-
-export default Dashboard;
+}

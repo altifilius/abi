@@ -1,30 +1,23 @@
-ENV_FILE ?= $(CURDIR)/.env
+ROOT := $(abspath $(CURDIR)/..)
+PYTHON := $(ROOT)/.venv/bin/python
 REPORT_ID ?= default_report
-PDF ?= sample.pdf
+PDF ?=
+AI_POLICY ?= local
 
-ALEMBIC := alembic -c alembic.ini
-UVICORN := $(shell [ -x "$(CURDIR)/../.venv/bin/uvicorn" ] && echo "$(CURDIR)/../.venv/bin/uvicorn" || echo "uvicorn")
-
-.PHONY: migrate ingest dev
+.PHONY: migrate ingest dev reminders watch-sources
 
 migrate:
-	@echo "Running migrations..."
-	$(ALEMBIC) upgrade head
+	@PYTHONPATH=$(ROOT) $(PYTHON) -m alembic -c alembic.ini upgrade head
 
 ingest:
-	@echo "Ingesting $(PDF) with report_id=$(REPORT_ID)..."
-	@set -a; [ ! -f "$(ENV_FILE)" ] || . "$(ENV_FILE)"; set +a; \
-	PYTHONPATH=.. python -m backend.ingest_report "$(PDF)" --report-id "$(REPORT_ID)"
+	@test -n "$(PDF)" || (echo 'Provide PDF=/absolute/path/report.pdf'; exit 2)
+	@PYTHONPATH=$(ROOT) $(PYTHON) -m backend.ingest_report "$(PDF)" --report-id "$(REPORT_ID)" --ai-policy "$(AI_POLICY)"
 
 dev:
-	@echo "Starting FastAPI dev server..."
-	@set -a; [ ! -f "$(ENV_FILE)" ] || . "$(ENV_FILE)"; set +a; \
-	HOST=$${HOST:-127.0.0.1}; \
-	PORT=$${PORT:-8000}; \
-	case "$${RELOAD:-true}" in \
-		1|true|yes|on) RELOAD_ARG=--reload ;; \
-		0|false|no|off) RELOAD_ARG= ;; \
-		*) echo "Invalid RELOAD value: $$RELOAD" >&2; exit 2 ;; \
-	esac; \
-	echo "Host=$$HOST Port=$$PORT Reload=$${RELOAD:-true}"; \
-	PYTHONPATH=.. $(UVICORN) backend.main:app $$RELOAD_ARG --host "$$HOST" --port "$$PORT"
+	@PYTHONPATH=$(ROOT) $(PYTHON) -m backend.start_local
+
+reminders:
+	@PYTHONPATH=$(ROOT) $(PYTHON) -m backend.reminders --interval 60
+
+watch-sources:
+	@PYTHONPATH=$(ROOT) $(PYTHON) -m backend.funding watch-once

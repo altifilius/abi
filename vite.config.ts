@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const proxyTarget =
     env.VITE_API_PROXY_TARGET ||
-    (env.VITE_API_BASE ? env.VITE_API_BASE.replace(/\/api\/?$/, '') : 'http://localhost:8000');
+    (env.VITE_API_BASE ? env.VITE_API_BASE.replace(/\/api\/?$/, '') : 'http://127.0.0.1:8001');
 
   return {
     server: {

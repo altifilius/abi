@@ -1,0 +1,17 @@
+[Unit]
+Description=Abi authenticated workspace
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/emre/Projects/abi-upgrade
+ExecStart=/home/emre/Projects/abi-upgrade/.venv/bin/python -m backend.start_local
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

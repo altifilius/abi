@@ -1,92 +1,182 @@
-import os
 import unittest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
-
-from backend.schemas import DimensionPlaybookData
-from backend.services import (
-    build_idea_chat_messages,
-    get_funds_catalog,
+from backend.models import ReportChunk, ReportVersion
+from backend.schemas import DimensionReport
+from backend.services.chat import build_chat_messages, run_idea_chat
+from backend.services.embeddings import embed_text
+from backend.services.llm import (
+    AIConfig,
+    AIConfigurationError,
+    AIProviderError,
+    call_llm,
+    get_ai_config,
+    strict_response_format,
 )
+from backend.services.reports import grounded_citations
+
+SCHEMA = {
+    "name": "reply",
+    "schema": {
+        "type": "object",
+        "properties": {"reply": {"type": "string"}},
+        "required": ["reply"],
+        "additionalProperties": False,
+    },
+}
 
 
-class CatalogTests(unittest.TestCase):
-    def test_loads_funds_catalog_successfully(self) -> None:
-        funds = get_funds_catalog()
-        self.assertGreaterEqual(len(funds), 4)
-
-        fund_ids = [f.id for f in funds]
-        self.assertEqual(len(fund_ids), len(set(fund_ids)), "Fund IDs must be unique")
-
-        for fund in funds:
-            self.assertTrue(fund.id)
-            self.assertTrue(fund.code)
-            self.assertTrue(fund.name)
-            self.assertIn(fund.institution, {"TUBITAK", "KOSGEB", "EU"})
-            self.assertTrue(fund.maxBudget)
-            self.assertTrue(fund.supportRate)
+def completion(content="real reply", refusal=None, finish_reason="stop"):
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=content, refusal=refusal),
+                finish_reason=finish_reason,
+            )
+        ]
+    )
 
 
-class ChatPromptTests(unittest.TestCase):
-    def test_build_idea_chat_messages_chat_mode(self) -> None:
-        messages = build_idea_chat_messages(
-            [{"role": "user", "text": "Merhabalar"}],
-            mode="chat",
-            language="tr",
+class ClientPolicyTests(unittest.TestCase):
+    def test_missing_local_configuration_never_uses_external_credentials(self):
+        settings = SimpleNamespace(
+            local_ai_api_key="",
+            local_ai_base_url=None,
+            local_ai_chat_model="",
+            openai_api_key="valid-external-key",
+            openai_chat_model="external-model",
         )
-        self.assertEqual(len(messages), 2)
-        self.assertEqual(messages[0]["role"], "system")
-        self.assertIn("Respond in Turkish", messages[0]["content"])
-        self.assertEqual(messages[1], {"role": "user", "content": "Merhabalar"})
+        with (
+            patch("backend.services.llm.settings", settings),
+            self.assertRaises(AIConfigurationError),
+        ):
+            get_ai_config("local")
 
-    def test_build_idea_chat_messages_summary_mode(self) -> None:
-        messages = build_idea_chat_messages(
-            [{"role": "user", "text": "Proje fikrim"}],
-            mode="summary",
-            language="en",
+    def test_configured_local_model_and_endpoint_remain_local(self):
+        settings = SimpleNamespace(
+            local_ai_api_key="configured-token",
+            local_ai_base_url="http://127.0.0.1:11435/v1",
+            local_ai_embedding_model="local-embedding",
+            openai_embedding_model="external-embedding",
         )
-        self.assertEqual(len(messages), 3)
-        self.assertEqual(messages[0]["role"], "system")
-        self.assertIn("Respond in English", messages[0]["content"])
-        self.assertEqual(messages[1]["role"], "user")
-        self.assertEqual(messages[2]["role"], "system")
-        self.assertIn("Project 1-Pager", messages[2]["content"])
+        with patch("backend.services.llm.settings", settings):
+            config = get_ai_config("local", "embedding")
+        self.assertEqual(config.model, "local-embedding")
+        self.assertEqual(config.policy, "local")
+        self.assertEqual(config.base_url, "http://127.0.0.1:11435/v1")
 
-    def test_build_idea_chat_messages_with_project_context(self) -> None:
-        messages = build_idea_chat_messages(
-            [{"role": "user", "text": "Detaylar"}],
-            project_context="Titre - Description",
+    def test_array_structured_output_is_rejected_before_provider_request(self):
+        with self.assertRaises(ValueError):
+            strict_response_format(
+                {"name": "bad", "schema": {"type": "array", "items": {"type": "string"}}}
+            )
+
+    def test_context_keeps_newest_without_discarding_persisted_history(self):
+        history = [{"role": "user", "text": f"message-{n}: " + "x" * 100} for n in range(300)]
+        original = [dict(item) for item in history]
+        messages = build_chat_messages(history, "server", max_context_chars=500)
+        self.assertIn("message-299", messages[-1]["content"])
+        self.assertLessEqual(sum(len(item["content"]) for item in messages), 500)
+        self.assertEqual(history, original)
+        self.assertNotIn("message-0:", str(messages))
+
+
+class ProviderBoundaryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_empty_refusal_truncation_and_invalid_json_are_errors(self):
+        for response in [
+            completion(""),
+            completion("refusal", refusal="blocked"),
+            completion("partial", finish_reason="length"),
+            completion("{}"),
+            completion("[]"),
+            completion("{bad"),
+        ]:
+            client = SimpleNamespace(
+                chat=SimpleNamespace(
+                    completions=SimpleNamespace(create=AsyncMock(return_value=response))
+                )
+            )
+            with (
+                self.subTest(response=response),
+                patch(
+                    "backend.services.llm.get_ai_config",
+                    return_value=AIConfig("local", "model", "http://localhost", "token"),
+                ),
+                patch("backend.services.llm.get_ai_client", return_value=client),
+                self.assertRaises(AIProviderError),
+            ):
+                await call_llm(
+                    [{"role": "user", "content": "private text"}],
+                    policy="local",
+                    response_format="json_schema",
+                    json_schema=SCHEMA,
+                )
+
+    async def test_semantic_refusal_and_whitespace_are_not_chat_success(self):
+        for response in [
+            {"reply": "cannot perform", "refused": True},
+            {"reply": "  ", "refused": False},
+        ]:
+            with (
+                patch("backend.services.chat.call_llm", AsyncMock(return_value=response)),
+                self.assertRaises(AIProviderError),
+            ):
+                await run_idea_chat([], policy="local")
+
+    async def test_embedding_results_must_cover_all_input_indices(self):
+        client = SimpleNamespace(
+            embeddings=SimpleNamespace(
+                create=AsyncMock(
+                    return_value=SimpleNamespace(
+                        data=[SimpleNamespace(index=0, embedding=[1.0, 0.0])]
+                    )
+                )
+            )
         )
-        self.assertEqual(len(messages), 3)
-        self.assertEqual(messages[0]["role"], "system")
-        self.assertEqual(messages[1]["role"], "user")
-        self.assertIn("Project context", messages[1]["content"])
-        self.assertEqual(messages[2]["role"], "user")
+        with (
+            patch(
+                "backend.services.embeddings.get_ai_config",
+                return_value=AIConfig("local", "embedding", "http://localhost", "token"),
+            ),
+            patch("backend.services.embeddings.get_ai_client", return_value=client),
+            self.assertRaises(AIProviderError),
+        ):
+            await embed_text(["first", "second"], policy="local")
 
 
-class PlaybookSchemaTests(unittest.TestCase):
-    def test_validates_dimension_playbook_data(self) -> None:
-        data = {
-            "dimension": "market",
-            "key_questions": ["What is TAM?"],
-            "common_mistakes": ["No market sizing"],
-            "recommended_actions_by_stage": {
-                "idea": ["Interview 10 users"],
-                "mvp": ["Run landing page test"],
-                "scale": ["Expand channels"],
-            },
-        }
-        playbook = DimensionPlaybookData.model_validate(data)
-        self.assertEqual(playbook.dimension, "market")
-        self.assertEqual(playbook.key_questions, ["What is TAM?"])
-        self.assertEqual(playbook.recommended_actions_by_stage.idea, ["Interview 10 users"])
-
-    def test_playbook_defaults_on_minimal_input(self) -> None:
-        playbook = DimensionPlaybookData(dimension="team")
-        self.assertEqual(playbook.dimension, "team")
-        self.assertEqual(playbook.key_questions, [])
-        self.assertEqual(playbook.recommended_actions_by_stage.mvp, [])
-
-
-if __name__ == "__main__":
-    unittest.main()
+class EvidenceBoundaryTests(unittest.TestCase):
+    def test_citation_is_exact_quote_and_returned_chunk_id(self):
+        chunk = ReportChunk(
+            id="chunk-a",
+            report_version_id="version-a",
+            page=2,
+            chunk_index=0,
+            text="Only this exact statement is evidence.",
+            embedding=[1.0],
+        )
+        version = ReportVersion(
+            id="version-a",
+            report_id="report",
+            source_sha256="f" * 64,
+            source_url="https://official.example/report.pdf",
+        )
+        report = DimensionReport(
+            dimension="market",
+            score=None,
+            diagnosis="Evidence limited",
+            recommended_actions=[],
+            risks=[],
+            notes="Source report",
+            citations=[{"chunk_id": "chunk-a", "quote": "exact statement"}],
+        )
+        citation = grounded_citations(report, [chunk], version)[0]
+        self.assertEqual(citation["page"], 2)
+        self.assertEqual(citation["report_version_id"], "version-a")
+        report.citations[0].quote = "invented evidence"
+        with self.assertRaises(AIProviderError):
+            grounded_citations(report, [chunk], version)
+        report.citations[0].quote = "exact statement"
+        report.citations[0].chunk_id = "not-returned"
+        with self.assertRaises(AIProviderError):
+            grounded_citations(report, [chunk], version)

@@ -1,154 +1,157 @@
-import {
-  Building2,
-  Calendar,
-  CheckCircle,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  HelpCircle,
-  LayoutDashboard,
-  MessageSquare,
-  Settings,
-} from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
-import { ABI_AVATAR_URL } from '../constants';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
+import type { Project, Session, Workspace } from '../types';
 
-interface LayoutProps {
+interface Props {
   children: React.ReactNode;
   activeTab: string;
   onTabChange: (tab: string) => void;
+  session: Session;
+  workspace: Workspace | null;
+  workspaces: Workspace[];
+  projects: Project[];
+  projectId: string;
+  onWorkspace: (id: string) => void;
+  onProject: (id: string) => void;
+  onLogout: () => void;
 }
-
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const { t, language, setLanguage } = useI18n();
-
-  const navItems = [
-    { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
-    { id: 'idea-agent', label: t('nav.aiCoach'), icon: MessageSquare },
-    { id: 'fund-matcher', label: t('nav.fundMatcher'), icon: CheckCircle },
-    { id: 'documents', label: t('nav.documents'), icon: FileText },
-    { id: 'incorporation', label: t('nav.incorporation'), icon: Building2 },
-    { id: 'settings', label: t('nav.settings'), icon: Settings },
-    { id: 'help', label: t('nav.help'), icon: HelpCircle },
+export default function Layout(props: Props) {
+  const { text, language, setLanguage } = useI18n();
+  const [open, setOpen] = useState(false);
+  const drawer = useRef<HTMLElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement;
+    drawer.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const keys = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggle.current?.focus();
+      }
+      if (event.key === 'Tab') {
+        const elements = Array.from(
+          drawer.current?.querySelectorAll<HTMLElement>('button,select,a') || [],
+        );
+        if (event.shiftKey && document.activeElement === elements[0]) {
+          event.preventDefault();
+          elements.at(-1)?.focus();
+        } else if (!event.shiftKey && document.activeElement === elements.at(-1)) {
+          event.preventDefault();
+          elements[0]?.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', keys);
+    return () => {
+      document.removeEventListener('keydown', keys);
+      previous?.focus();
+    };
+  }, [open]);
+  const items = [
+    ['dashboard', 'Özet', 'Overview'],
+    ['projects', 'Projeler / çalışma alanı', 'Projects / workspace'],
+    ['profile', 'Proje profili', 'Project profile'],
+    ['idea-agent', 'Fikir sohbeti', 'Idea conversation'],
+    ['draft', 'Genel proje taslağı', 'General project draft'],
+    ['funding', 'Fon keşfi (Ücretsiz)', 'Funding discovery (Free)'],
+    ['fund-matcher', 'Uygunluk değerlendirmesi', 'Eligibility evaluation'],
+    ['applications', 'Başvuru ve bütçe', 'Application & budget'],
+    ['documents', 'Belgeler', 'Documents'],
+    ['collaboration', 'Ekip / görev / takvim', 'Team / tasks / calendar'],
+    ['incorporation', 'Şirket kuruluşu', 'Incorporation'],
+    ['settings', 'Ayarlar', 'Settings'],
+    ['help', 'Yardım', 'Help'],
   ];
-
+  if (props.session.user.is_admin)
+    items.push(['sources', 'Kaynak yayını (yönetici)', 'Source publication (admin)']);
   return (
-    <div className="flex h-screen p-4 gap-4 overflow-hidden">
-      {/* Floating Glass Sidebar */}
+    <div className="app-shell">
+      <header className="topbar">
+        <button
+          ref={toggle}
+          type="button"
+          className="mobile-menu"
+          aria-controls="app-navigation"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {text('Menü', 'Menu')}
+        </button>
+        <strong>Abi</strong>
+        <span className="plan">{props.workspace?.plan.toUpperCase() || 'FREE'}</span>
+        <span className="user-name">{props.session.user.name}</span>
+        <button onClick={props.onLogout}>{text('Çıkış', 'Logout')}</button>
+      </header>
+      {open && (
+        <button
+          className="drawer-backdrop"
+          aria-label={text('Menüyü kapat', 'Close menu')}
+          onClick={() => setOpen(false)}
+        />
+      )}
       <aside
-        className={`${
-          isCollapsed ? 'w-24 px-4' : 'w-64 px-6'
-        } flex-shrink-0 bg-glass-dark/50 backdrop-blur-xl flex flex-col justify-between rounded-3xl border border-white/10 shadow-glass transition-all duration-300 ease-in-out py-6`}
+        id="app-navigation"
+        ref={drawer}
+        className={`sidebar ${open ? 'open' : ''}`}
+        aria-label={text('Ana gezinme', 'Main navigation')}
+        role="dialog"
+        aria-modal={open || undefined}
       >
-        <div>
-          <div
-            className={`flex items-center gap-3 mb-10 transition-all duration-300 ${isCollapsed ? 'justify-center' : ''}`}
+        <button className="mobile-menu" onClick={() => setOpen(false)}>
+          {text('Kapat', 'Close')}
+        </button>
+        <label>
+          {text('Çalışma alanı', 'Workspace')}
+          <select
+            value={props.workspace?.id || ''}
+            onChange={(e) => props.onWorkspace(e.target.value)}
           >
-            <div className="bg-gradient-to-br from-primary to-secondary rounded-full p-0.5 shadow-glow-primary flex-shrink-0">
-              <img
-                alt="Abi - ScaleUp Inc."
-                className="w-10 h-10 rounded-full bg-surface object-cover"
-                src={ABI_AVATAR_URL}
-              />
-            </div>
-            <div
-              className={`overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}
-            >
-              <h1 className="font-bold text-lg text-white whitespace-nowrap">ScaleUp Inc.</h1>
-              <p className="text-sm text-text-secondary whitespace-nowrap">
-                {t('layout.workspace')}
-              </p>
-            </div>
-          </div>
-
-          <nav className="flex flex-col gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onTabChange(item.id)}
-                  title={isCollapsed ? item.label : undefined}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
-                    isActive
-                      ? 'bg-primary/20 text-primary font-semibold shadow-[inset_0_0_20px_rgba(0,245,212,0.1)]'
-                      : 'text-text-secondary hover:bg-white/5 hover:text-white'
-                  } ${isCollapsed ? 'justify-center px-2' : ''}`}
-                >
-                  <Icon
-                    size={20}
-                    className={`flex-shrink-0 ${isActive ? 'icon-glow' : ''}`}
-                    style={isActive ? ({ '--glow-color': '#00F5D4' } as React.CSSProperties) : {}}
-                  />
-                  <span
-                    className={`overflow-hidden transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}
-                  >
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
+            {props.workspaces.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {text('Proje', 'Project')}
+          <select value={props.projectId} onChange={(e) => props.onProject(e.target.value)}>
+            <option value="">{text('Proje seçin', 'Select a project')}</option>
+            {props.projects.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <nav>
+          {items.map(([id, tr, en]) => (
             <button
-              title={isCollapsed ? t('nav.schedule') : undefined}
-              className={`flex items-center gap-3 px-4 py-3 text-text-secondary hover:bg-white/5 hover:text-white rounded-2xl transition-colors ${isCollapsed ? 'justify-center px-2' : ''}`}
+              key={id}
+              className={props.activeTab === id ? 'selected' : ''}
+              aria-current={props.activeTab === id ? 'page' : undefined}
+              onClick={() => {
+                props.onTabChange(id);
+                setOpen(false);
+              }}
             >
-              <Calendar size={20} className="flex-shrink-0" />
-              <span
-                className={`overflow-hidden transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}
-              >
-                {t('nav.schedule')}
-              </span>
+              {text(tr, en)}
             </button>
-          </nav>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div
-            className={`flex items-center gap-2 px-4 py-3 text-text-secondary rounded-2xl transition-colors ${isCollapsed ? 'justify-center px-2' : 'justify-between'}`}
-          >
-            {!isCollapsed && (
-              <span className="text-xs uppercase tracking-wide">{t('layout.language')}</span>
-            )}
-            <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-              <button
-                onClick={() => setLanguage('en')}
-                className={`px-3 py-2 text-xs font-semibold ${language === 'en' ? 'bg-primary text-background' : 'text-white/80'}`}
-              >
-                EN
-              </button>
-              <button
-                onClick={() => setLanguage('tr')}
-                className={`px-3 py-2 text-xs font-semibold ${language === 'tr' ? 'bg-primary text-background' : 'text-white/80'}`}
-              >
-                TR
-              </button>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className={`mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-text-secondary hover:text-white rounded-full transition-all border border-white/10 ${isCollapsed ? 'px-2' : ''}`}
-          >
-            {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            <span
-              className={`overflow-hidden transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100 text-sm'}`}
-            >
-              Collapse
-            </span>
-          </button>
-        </div>
+          ))}
+        </nav>
+        <label>
+          {text('Dil', 'Language')}
+          <select value={language} onChange={(e) => setLanguage(e.target.value as 'tr' | 'en')}>
+            <option value="tr">Türkçe</option>
+            <option value="en">English</option>
+          </select>
+        </label>
       </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-hidden flex flex-col rounded-3xl relative">
-        <div className="flex-1 overflow-y-auto scrollbar-hide">{children}</div>
+      <main id="main-content" className="main-content">
+        {props.children}
       </main>
     </div>
   );
-};
-
-export default Layout;
+}

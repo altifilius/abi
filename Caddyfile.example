@@ -1,0 +1,7 @@
+# Public deployment example; replace abi.example.com and configure DNS.
+# The backend must remain loopback-bound, PUBLIC_APP_URL=https://your-domain,
+# SESSION_COOKIE_SECURE=true and CORS_ORIGINS=https://your-domain.
+abi.example.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8001
+}

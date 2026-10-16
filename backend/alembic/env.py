@@ -10,7 +10,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-import backend.models  # noqa: F401
+import backend.ai
+import backend.applications
+import backend.collaboration
+import backend.funding
+import backend.models
+import backend.reminders
+import backend.workspaces  # noqa: F401
 from backend.db import Base
 from backend.settings import settings
 

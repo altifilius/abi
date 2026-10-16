@@ -18,14 +18,10 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def init_db() -> None:
-    """
-    Create tables and ensure the pgvector extension exists.
-    Run once during setup or in a migration script.
-    """
+    """Verify migrated schema without changing database structure at startup."""
     from sqlalchemy import text
 
-    from . import models  # noqa: F401 - imports model metadata
-
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.run_sync(Base.metadata.create_all)
+    async with engine.connect() as conn:
+        version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
+        if version != "0002_workspace_product":
+            raise RuntimeError("Database migrations are required: make migrate")

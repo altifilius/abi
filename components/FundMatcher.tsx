@@ -1,217 +1,386 @@
-import { AlertCircle, ArrowRight, Award, Loader2, Sparkles, Target } from 'lucide-react';
-import type React from 'react';
-import { useState } from 'react';
-import { FUNDS } from '../constants';
-import { useI18n } from '../i18n';
-import { runFundMatcher } from '../services/api';
-import type { FundMatch, Project } from '../types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '../services/api';
+import type { Project, Workspace } from '../types';
+import {
+  buttonClass,
+  errorText,
+  inputClass,
+  panelClass,
+  SourceLink,
+  timestamp,
+  useEvidenceText,
+} from './EvidenceUi';
+import FundingCatalog, { type FundingCall } from './FundingCatalog';
 
+interface Condition {
+  id: string;
+  label: string;
+  status: string;
+  field?: string;
+  actual: unknown;
+  expected: unknown;
+  source_url: string;
+  source_locator?: string;
+  review?: { actor_id: string; approved: boolean; notes: string; reviewed_at: string };
+}
+interface Evaluation {
+  id: string;
+  project_id: string;
+  profile_revision: number;
+  call_id: string;
+  call_version: number;
+  source_revision_id: string;
+  rule_version: string;
+  evaluated_at: string;
+  stale: boolean;
+  result: {
+    eligibility: string;
+    conditions: Condition[];
+    ranking: { score: number; explanation: string };
+    reviewed_from?: string;
+  };
+}
 interface FundMatcherProps {
   project: Project;
-  onUpdateMatches: (matches: FundMatch[]) => void;
+  workspace: Workspace;
+  onSelectCall?: (callId: string) => void;
 }
 
-const FundMatcher: React.FC<FundMatcherProps> = ({ project, onUpdateMatches }) => {
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisDone, setAnalysisDone] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [analysisEmpty, setAnalysisEmpty] = useState(false);
-  const { t } = useI18n();
+export default function FundMatcher({ project, workspace, onSelectCall }: FundMatcherProps) {
+  const text = useEvidenceText();
+  const [evaluationList, setEvaluationList] = useState<{
+    projectId: string;
+    items: Evaluation[];
+  } | null>(null);
+  const evaluations = evaluationList?.projectId === project.id ? evaluationList.items : [];
+  const scope = useRef<{ projectId: string; controller: AbortController } | null>(null);
+  const listRequest = useRef<AbortController | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [decisions, setDecisions] = useState<Record<string, { approved: boolean; notes: string }>>(
+    {},
+  );
+  const canReview = ['owner', 'admin', 'reviewer'].includes(workspace.role || '');
 
-  const getErrorMessage = (error: unknown) => {
-    if (error instanceof Error && error.message) return error.message;
-    return t('fundMatcher.error.generic');
-  };
+  const loadEvaluations = useCallback(async () => {
+    const active = scope.current;
+    if (active?.projectId !== project.id || active.controller.signal.aborted) return;
+    listRequest.current?.abort();
+    const request = new AbortController();
+    listRequest.current = request;
+    setError('');
+    setLoading(true);
+    try {
+      const data = await api<Evaluation[]>(`/projects/${project.id}/evaluations`, {
+        signal: request.signal,
+      });
+      if (request.signal.aborted || active.controller.signal.aborted) return;
+      setEvaluationList({
+        projectId: project.id,
+        items: data.map((evaluation) => ({
+          ...evaluation,
+          stale: evaluation.stale || evaluation.profile_revision !== project.revision,
+        })),
+      });
+    } catch (reason) {
+      if (!request.signal.aborted && !active.controller.signal.aborted) setError(errorText(reason));
+    } finally {
+      if (!request.signal.aborted && !active.controller.signal.aborted) setLoading(false);
+    }
+  }, [project.id, project.revision]);
 
-  const runAnalysis = async () => {
-    if (!project.description?.trim()) {
-      setAnalysisError(t('fundMatcher.error.noDescription'));
+  useEffect(() => {
+    const active = { projectId: project.id, controller: new AbortController() };
+    scope.current = active;
+    setDecisions({});
+    setBusy(false);
+    void loadEvaluations();
+    return () => {
+      active.controller.abort();
+      listRequest.current?.abort();
+    };
+  }, [project.id, loadEvaluations]);
+
+  async function evaluate(call: FundingCall) {
+    const active = scope.current;
+    if (active?.projectId !== project.id || active.controller.signal.aborted) return;
+    const signal = active.controller.signal;
+    setBusy(true);
+    setError('');
+    try {
+      await api<Evaluation>(`/projects/${project.id}/evaluate`, {
+        method: 'POST',
+        signal,
+        json: { call_id: call.id },
+      });
+      if (!signal.aborted) await loadEvaluations();
+    } catch (reason) {
+      if (!signal.aborted) setError(errorText(reason));
+    } finally {
+      if (!signal.aborted) setBusy(false);
+    }
+  }
+
+  async function review(evaluation: Evaluation) {
+    const active = scope.current;
+    if (active?.projectId !== project.id || active.controller.signal.aborted) return;
+    const signal = active.controller.signal;
+    setBusy(true);
+    setError('');
+    const selected = evaluation.result.conditions.filter(
+      (condition) => condition.status === 'review' && decisions[`${evaluation.id}:${condition.id}`],
+    );
+    if (!selected.length) {
+      setError(text('En az bir inceleme kararı seçin.', 'Select at least one review decision.'));
+      setBusy(false);
       return;
     }
-
-    setAnalysisError(null);
-    setAnalysisEmpty(false);
-    setAnalysisDone(false);
-    setIsAnalyzing(true);
     try {
-      const results = await runFundMatcher(project.description);
-
-      const matches: FundMatch[] = (results || [])
-        .map((r: FundMatch) => ({
-          fundId: r.fundId,
-          score: Number(r.score),
-          rationale: r.rationale,
-          eligibilityStatus: r.eligibilityStatus,
-        }))
-        .sort((a: FundMatch, b: FundMatch) => b.score - a.score);
-
-      onUpdateMatches(matches);
-      setAnalysisEmpty(matches.length === 0);
-      setAnalysisDone(true);
-    } catch (error) {
-      console.error('Analysis failed', error);
-      setAnalysisError(getErrorMessage(error));
-      setAnalysisDone(false);
+      await api<Evaluation>(`/evaluations/${evaluation.id}/review`, {
+        method: 'POST',
+        signal,
+        json: {
+          decisions: selected.map((condition) => ({
+            condition_id: condition.id,
+            ...decisions[`${evaluation.id}:${condition.id}`],
+          })),
+        },
+      });
+      if (!signal.aborted) await loadEvaluations();
+    } catch (reason) {
+      if (!signal.aborted) setError(errorText(reason));
     } finally {
-      setIsAnalyzing(false);
+      if (!signal.aborted) setBusy(false);
     }
-  };
+  }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-primary border-primary shadow-glow-primary';
-    if (score >= 50) return 'text-yellow-400 border-yellow-400';
-    return 'text-red-400 border-red-400';
+  const labels: Record<string, string> = {
+    eligible: text('Koşullar sağlandı', 'Conditions satisfied'),
+    ineligible: text('Uygun değil', 'Ineligible'),
+    information_missing: text('Bilgi eksik', 'Information missing'),
+    review_required: text('İnsan incelemesi gerekli', 'Human review required'),
+    closed: text('Kapalı', 'Closed'),
+    pass: text('Sağlandı', 'Pass'),
+    fail: text('Sağlanmadı', 'Fail'),
+    missing: text('Bilinmiyor / eksik bilgi', 'Unknown / missing information'),
+    review: text('Yorum gerektirir', 'Interpretation required'),
   };
 
   return (
-    <div className="space-y-6 h-full">
-      {/* Project Context */}
-      <div className="bg-glass-dark p-8 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl">
-        <h3 className="text-xl font-bold mb-4 flex items-center gap-3 text-white">
-          <div className="p-2 bg-primary/20 rounded-xl text-primary">
-            <Target size={24} />
-          </div>
-          {t('fundMatcher.currentContext')}
-        </h3>
-        <div className="bg-white/5 p-6 rounded-2xl border border-white/10 text-sm text-text-primary leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto custom-scrollbar">
-          {project.description || t('fundMatcher.noDescription')}
-        </div>
-
-        <div className="mt-6 flex justify-end">
-          {!analysisDone ? (
-            <button
-              onClick={runAnalysis}
-              disabled={isAnalyzing || !project.description}
-              className="flex items-center gap-2 bg-primary text-background px-8 py-3 rounded-xl hover:bg-primary/90 disabled:opacity-50 font-bold transition-all shadow-glow-primary"
-            >
-              {isAnalyzing ? (
-                <Loader2 className="animate-spin" size={20} />
-              ) : (
-                <Sparkles size={20} />
-              )}
-              {isAnalyzing ? t('fundMatcher.analyzingRules') : t('fundMatcher.runAnalysis')}
-            </button>
-          ) : (
-            <button
-              onClick={() => setAnalysisDone(false)}
-              className="text-sm text-text-secondary hover:text-white underline"
-            >
-              {t('fundMatcher.reset')}
-            </button>
+    <div className="space-y-6">
+      <section className={panelClass}>
+        <h2 className="text-xl font-semibold">
+          {text('Kaynak temelli uygunluk', 'Source-grounded eligibility')}
+        </h2>
+        <p>
+          {text(
+            'Uygunluk, sıralama puanından ayrıdır. Eksik bilgiler “hayır” sayılmaz; insan yorumu ayrı inceleme gerektirir. Bu, resmî hibe veya kabul kararı değildir.',
+            'Eligibility is separate from ranking. Missing facts are not treated as “no”; interpretation requires human review. This is not an official award or acceptance decision.',
           )}
-        </div>
-        {analysisError && (
-          <div className="mt-4 bg-red-500/10 border border-red-500/30 text-red-100 px-4 py-3 rounded-2xl text-sm">
-            {analysisError}
-          </div>
+        </p>
+        {workspace.plan !== 'pro' && (
+          <p>
+            {text(
+              'Kaynak kataloğu Free ile açıktır. Uygunluk değerlendirmesi ve başvuru paketleri Pro gerektirir. Ödeme etkinleştirilmiş değildir.',
+              'The source catalog is available on Free. Eligibility evaluation and application packages require Pro. Payment activation is not implemented.',
+            )}
+          </p>
         )}
-      </div>
-
-      {isAnalyzing && (
-        <div className="space-y-3">
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="bg-glass-dark rounded-3xl border border-white/5 p-6 animate-pulse"
-            >
-              <div className="h-4 w-24 bg-white/10 rounded-full mb-3" />
-              <div className="h-3 w-full bg-white/5 rounded-full mb-2" />
-              <div className="h-3 w-3/4 bg-white/5 rounded-full" />
-            </div>
-          ))}
+        {project.confirmed_revision !== project.revision && (
+          <p>
+            {text(
+              'Değerlendirmeden önce mevcut profil sürümünü profil ekranında onaylayın.',
+              'Confirm the current profile revision in the profile editor before evaluation.',
+            )}
+          </p>
+        )}
+        <p>
+          {text('Mevcut profil sürümü', 'Current profile revision')}: {project.revision} ·{' '}
+          {text('Onaylı sürüm', 'Confirmed revision')}: {project.confirmed_revision ?? '—'}
+        </p>
+        {error && <p role="alert">{error}</p>}
+      </section>
+      <FundingCatalog
+        workspace={workspace}
+        project={project}
+        onSelectCall={onSelectCall}
+        onEvaluate={evaluate}
+        evaluating={busy}
+      />
+      <section className={panelClass}>
+        <div className="flex flex-wrap justify-between gap-2">
+          <h2 className="text-xl font-semibold">
+            {text('Değerlendirme geçmişi — tüm sonuçlar', 'Evaluation history — all results')}
+          </h2>
+          <button
+            className={buttonClass}
+            disabled={loading || busy}
+            onClick={() => void loadEvaluations()}
+          >
+            {text('Yenile', 'Refresh')}
+          </button>
         </div>
-      )}
-
-      {/* Results */}
-      {analysisDone && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <h3 className="text-xl font-bold text-white pl-2">{t('fundMatcher.recommendedFunds')}</h3>
-          {analysisEmpty ? (
-            <div className="bg-white/5 border border-white/10 text-text-secondary px-4 py-6 rounded-2xl text-sm">
-              {t('fundMatcher.noResults')}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {project.matchedFunds.map((match) => {
-                const fund = FUNDS.find((f) => f.id === match.fundId);
-                if (!fund) return null;
-
-                return (
-                  <div
-                    key={match.fundId}
-                    className="bg-glass-dark rounded-3xl border border-white/10 p-8 shadow-glass hover:border-primary/50 transition-all duration-300 relative overflow-hidden group"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 pointer-events-none"></div>
-
-                    {match.eligibilityStatus === 'eligible' && (
-                      <div className="absolute top-0 right-0 bg-primary text-background text-xs uppercase font-bold px-4 py-2 rounded-bl-2xl shadow-glow-primary flex items-center gap-1">
-                        <Award size={14} /> {t('fundMatcher.topMatch')}
+        {loading && <p role="status">{text('Geçmiş yükleniyor…', 'Loading history…')}</p>}
+        {!loading && !error && evaluations.length === 0 && (
+          <p>{text('Henüz kayıtlı değerlendirme yok.', 'No saved evaluations yet.')}</p>
+        )}
+        {evaluations.map((evaluation) => (
+          <article
+            key={evaluation.id}
+            className="border border-border-dark rounded-lg p-4 space-y-3"
+          >
+            <h3 className="font-semibold">
+              {labels[evaluation.result.eligibility] || evaluation.result.eligibility}
+            </h3>
+            {(evaluation.stale || evaluation.profile_revision !== project.revision) && (
+              <p role="status">
+                {text(
+                  'ESKİ: Profil değişti. Tarihsel kayıt korunur; mevcut profil için yeniden değerlendirin.',
+                  'STALE: The profile changed. Historical evidence is retained; evaluate the current profile again.',
+                )}
+              </p>
+            )}
+            <p>
+              {timestamp(evaluation.evaluated_at)} · {text('Profil', 'Profile')}{' '}
+              {evaluation.profile_revision} · {text('Çağrı', 'Call')} {evaluation.call_id} / v
+              {evaluation.call_version}
+            </p>
+            <p>
+              {text('Kaynak revizyonu', 'Source revision')}: {evaluation.source_revision_id} ·{' '}
+              {text('Kural sürümü', 'Rule version')}: {evaluation.rule_version}
+            </p>
+            <p>
+              {text('Ayrı sıralama puanı', 'Separate ranking score')}:{' '}
+              {evaluation.result.ranking.score} — {evaluation.result.ranking.explanation}
+            </p>
+            {evaluation.result.reviewed_from && (
+              <p>
+                {text('İncelenen önceki kayıt', 'Reviewed prior record')}:{' '}
+                {evaluation.result.reviewed_from}
+              </p>
+            )}
+            {evaluation.result.conditions.map((condition) => {
+              const key = `${evaluation.id}:${condition.id}`;
+              return (
+                <section key={condition.id} className="border-t border-border-dark pt-3 space-y-2">
+                  <h4 className="font-semibold">
+                    {condition.label} — {labels[condition.status] || condition.status}
+                  </h4>
+                  <p>
+                    {text('Alan', 'Field')}: {condition.field || '—'}
+                  </p>
+                  <p className="break-all">
+                    {text('Mevcut değer', 'Actual')}:{' '}
+                    {condition.actual === null || condition.actual === undefined
+                      ? text('Bilinmiyor', 'Unknown')
+                      : JSON.stringify(condition.actual)}
+                  </p>
+                  <p className="break-all">
+                    {text('Beklenen', 'Expected')}: {JSON.stringify(condition.expected) ?? '—'}
+                  </p>
+                  <SourceLink url={condition.source_url} />
+                  <p>{condition.source_locator}</p>
+                  {condition.review && (
+                    <p>
+                      {text('İnceleyen', 'Reviewed by')}: {condition.review.actor_id} ·{' '}
+                      {timestamp(condition.review.reviewed_at)} ·{' '}
+                      {condition.review.approved
+                        ? text('Onaylandı', 'Approved')
+                        : text('Reddedildi', 'Rejected')}{' '}
+                      · {condition.review.notes}
+                    </p>
+                  )}
+                  {condition.status === 'review' &&
+                    workspace.plan === 'pro' &&
+                    canReview &&
+                    !(evaluation.stale || evaluation.profile_revision !== project.revision) && (
+                      <div className="space-y-2">
+                        <label>
+                          {text('İnsan kararı', 'Human decision')}
+                          <select
+                            className={inputClass}
+                            value={decisions[key] ? String(decisions[key].approved) : ''}
+                            onChange={(event) =>
+                              setDecisions((previous) => {
+                                const next = { ...previous };
+                                if (!event.target.value) delete next[key];
+                                else
+                                  next[key] = {
+                                    approved: event.target.value === 'true',
+                                    notes: next[key]?.notes || '',
+                                  };
+                                return next;
+                              })
+                            }
+                          >
+                            <option value="">{text('Karar seçin', 'Choose a decision')}</option>
+                            <option value="true">
+                              {text('Koşul sağlandı', 'Condition satisfied')}
+                            </option>
+                            <option value="false">
+                              {text('Koşul sağlanmadı', 'Condition not satisfied')}
+                            </option>
+                          </select>
+                        </label>
+                        {decisions[key] && (
+                          <label>
+                            {text(
+                              'İnceleme gerekçesi (en az 10 karakter)',
+                              'Review rationale (at least 10 characters)',
+                            )}
+                            <textarea
+                              className={inputClass}
+                              minLength={10}
+                              maxLength={3000}
+                              required
+                              value={decisions[key].notes}
+                              onChange={(event) =>
+                                setDecisions((previous) => ({
+                                  ...previous,
+                                  [key]: { ...previous[key], notes: event.target.value },
+                                }))
+                              }
+                            />
+                          </label>
+                        )}
                       </div>
                     )}
-
-                    <div className="flex flex-col md:flex-row gap-8">
-                      {/* Score Circle */}
-                      <div className="flex-shrink-0 flex flex-col items-center justify-center gap-3">
-                        <div
-                          className={`w-20 h-20 rounded-full flex items-center justify-center border-4 text-2xl font-bold bg-surface/50 backdrop-blur-md ${getScoreColor(match.score)}`}
-                        >
-                          {match.score}
-                        </div>
-                        <span className="text-xs font-semibold uppercase text-text-secondary tracking-wider">
-                          {t('fundMatcher.fitScore')}
-                        </span>
-                      </div>
-
-                      {/* Details */}
-                      <div className="flex-1">
-                        <div className="flex items-baseline gap-3 mb-2">
-                          <span className="bg-surface border border-white/10 text-primary text-xs px-3 py-1 rounded-full font-bold shadow-sm">
-                            {fund.institution}
-                          </span>
-                          <h4 className="text-xl font-bold text-white">
-                            {fund.code} - {fund.name}
-                          </h4>
-                        </div>
-
-                        <p className="text-text-primary mb-4 text-sm leading-relaxed opacity-90">
-                          {fund.description}
-                        </p>
-
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-4 backdrop-blur-sm">
-                          <p className="text-xs font-bold text-secondary uppercase mb-2 flex items-center gap-2">
-                            <AlertCircle size={14} /> {t('fundMatcher.aiRationale')}
-                          </p>
-                          <p className="text-sm text-white italic">"{match.rationale}"</p>
-                        </div>
-
-                        <div className="flex items-center gap-6 text-xs text-text-secondary font-medium">
-                          <span className="flex items-center gap-1">
-                            {t('fundMatcher.maxBudget')}:{' '}
-                            <span className="text-white font-bold text-sm">{fund.maxBudget}</span>
-                          </span>
-                          <span className="flex items-center gap-1">
-                            {t('fundMatcher.supportRate')}:{' '}
-                            <span className="text-white font-bold text-sm">{fund.supportRate}</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Action */}
-                      <div className="flex flex-col justify-center">
-                        <button className="flex items-center gap-2 text-background bg-primary hover:bg-white font-bold px-6 py-3 rounded-xl transition-all shadow-glow-primary">
-                          {t('fundMatcher.startApplication')} <ArrowRight size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                </section>
+              );
+            })}
+            {workspace.plan === 'pro' &&
+              canReview &&
+              !evaluation.stale &&
+              evaluation.profile_revision === project.revision &&
+              evaluation.result.conditions.some((condition) => condition.status === 'review') && (
+                <button
+                  className={buttonClass}
+                  disabled={
+                    busy ||
+                    !evaluation.result.conditions.some(
+                      (condition) =>
+                        condition.status === 'review' &&
+                        decisions[`${evaluation.id}:${condition.id}`],
+                    ) ||
+                    evaluation.result.conditions.some(
+                      (condition) =>
+                        condition.status === 'review' &&
+                        decisions[`${evaluation.id}:${condition.id}`] &&
+                        decisions[`${evaluation.id}:${condition.id}`].notes.trim().length < 10,
+                    )
+                  }
+                  onClick={() => review(evaluation)}
+                >
+                  {text(
+                    'İncelemeyi yeni tarihsel kayıt olarak kaydet',
+                    'Save review as a new historical record',
+                  )}
+                </button>
+              )}
+          </article>
+        ))}
+      </section>
     </div>
   );
-};
-
-export default FundMatcher;
+}

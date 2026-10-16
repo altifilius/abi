@@ -1,81 +1,58 @@
-import { describe, expect, it } from 'bun:test';
-import {
-  ApiError,
-  parseFundMatch,
-  parseFundMatcherResponse,
-  parseIdeaChatResponse,
-} from '../services/api';
+import { afterEach, describe, expect, it } from 'bun:test';
+import { ApiError, api, clearSession } from '../services/api';
 
-describe('API Contract Validation', () => {
-  it('parses valid idea chat response', () => {
-    const res = parseIdeaChatResponse({ reply: 'Hello from coach' });
-    expect(res.reply).toBe('Hello from coach');
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  clearSession();
+});
+describe('Readable private request failures', () => {
+  it('does not expose submitted secrets from validation input', async () => {
+    globalThis.fetch = (async () =>
+      Response.json(
+        { detail: [{ loc: ['body', 'password'], msg: 'Too short', input: 'SECRET-PASSWORD' }] },
+        { status: 422 },
+      )) as unknown as typeof fetch;
+    try {
+      await api('/auth/register', { method: 'POST', json: { password: 'SECRET-PASSWORD' } });
+      throw new Error('Expected rejection');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as Error).message).toContain('Too short');
+      expect((error as Error).message).not.toContain('SECRET');
+    }
   });
-
-  it('rejects invalid idea chat response', () => {
-    expect(() => parseIdeaChatResponse(null)).toThrow(ApiError);
-    expect(() => parseIdeaChatResponse({})).toThrow(ApiError);
-    expect(() => parseIdeaChatResponse({ reply: 123 })).toThrow(ApiError);
-  });
-
-  it('parses valid fund match items', () => {
-    const match = parseFundMatch({
-      fundId: 'tubitak-1501',
-      score: 85,
-      rationale: 'Strong R&D match',
-      eligibilityStatus: 'eligible',
-    });
-    expect(match.fundId).toBe('tubitak-1501');
-    expect(match.score).toBe(85);
-    expect(match.eligibilityStatus).toBe('eligible');
-  });
-
-  it('rejects invalid fund match scores and statuses', () => {
-    expect(() =>
-      parseFundMatch({
-        fundId: 'tubitak-1501',
-        score: 101, // > 100
-        rationale: 'Out of range',
-        eligibilityStatus: 'eligible',
-      }),
-    ).toThrow(ApiError);
-
-    expect(() =>
-      parseFundMatch({
-        fundId: 'tubitak-1501',
-        score: -5, // < 0
-        rationale: 'Negative',
-        eligibilityStatus: 'eligible',
-      }),
-    ).toThrow(ApiError);
-
-    expect(() =>
-      parseFundMatch({
-        fundId: 'tubitak-1501',
-        score: 80,
-        rationale: 'Invalid status',
-        eligibilityStatus: 'unknown',
-      }),
-    ).toThrow(ApiError);
-  });
-
-  it('parses valid fund matcher response envelope', () => {
-    const res = parseFundMatcherResponse({
-      matches: [
+  it('shows required application issues without private request data', async () => {
+    globalThis.fetch = (async () =>
+      Response.json(
         {
-          fundId: 'tubitak-1507',
-          score: 75,
-          rationale: 'SME early project',
-          eligibilityStatus: 'conditional',
+          detail: {
+            code: 'application_not_ready',
+            errors: [
+              {
+                field: 'sections.problem',
+                message: 'Required section is missing',
+                input: 'PRIVATE-DRAFT',
+              },
+            ],
+          },
         },
-      ],
-    });
-    expect(res.matches.length).toBe(1);
-    expect(res.matches[0].fundId).toBe('tubitak-1507');
+        { status: 409 },
+      )) as unknown as typeof fetch;
+    await expect(api('/programs')).rejects.toThrow('Required section is missing');
   });
-
-  it('rejects malformed fund matcher envelopes', () => {
-    expect(() => parseFundMatcherResponse({ matches: 'not an array' })).toThrow(ApiError);
-    expect(() => parseFundMatcherResponse(null)).toThrow(ApiError);
+  it('does not render untrusted server HTML as a request message', async () => {
+    globalThis.fetch = (async () =>
+      new Response('<script>private backend details</script>', {
+        status: 502,
+      })) as unknown as typeof fetch;
+    try {
+      await api('/programs');
+      throw new Error('Expected rejection');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as Error).message).not.toContain('script');
+      expect((error as Error).message).not.toContain('private');
+    }
   });
 });

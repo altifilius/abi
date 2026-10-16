@@ -1,49 +1,71 @@
-import { BookOpen, LifeBuoy, Sparkles } from 'lucide-react';
-import type React from 'react';
 import { useI18n } from '../i18n';
-
-const Help: React.FC = () => {
-  const { t } = useI18n();
-
+export default function Help() {
+  const { text } = useI18n();
   return (
-    <div className="space-y-6 h-full">
-      <div className="bg-glass-dark p-8 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{t('help.title')}</h1>
-          <p className="text-text-secondary text-sm mt-1">{t('help.subtitle')}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="bg-glass-dark p-6 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl">
-          <div className="flex items-center gap-3 mb-4">
-            <Sparkles className="text-primary" size={20} />
-            <h2 className="text-lg font-semibold text-white">{t('help.quickstart')}</h2>
-          </div>
-          <ul className="space-y-3 text-sm text-text-primary">
-            <li>1. {t('help.step.install')}</li>
-            <li>2. {t('help.step.env')}</li>
-            <li>3. {t('help.step.dev')}</li>
-          </ul>
-        </section>
-
-        <section className="bg-glass-dark p-6 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl">
-          <div className="flex items-center gap-3 mb-4">
-            <BookOpen className="text-secondary" size={20} />
-            <h2 className="text-lg font-semibold text-white">{t('help.docs')}</h2>
-          </div>
-          <ul className="space-y-2 text-sm text-text-primary">
-            <li>- {t('help.link.readme')}</li>
-          </ul>
-        </section>
-      </div>
-
-      <section className="bg-white/5 p-6 rounded-3xl border border-white/10 shadow-glass backdrop-blur-xl text-sm text-text-primary flex items-center gap-3">
-        <LifeBuoy className="text-primary" size={20} />
-        <span>{t('help.support')}</span>
+    <div className="stack">
+      <h1>{text('Yardım', 'Help')}</h1>
+      <section className="panel">
+        <h2>{text('Başlangıç', 'Getting started')}</h2>
+        <ol>
+          <li>
+            {text(
+              'Şirket zorunlu olmadan hesap açın; kişisel çalışma alanınız oluşturulur.',
+              'Sign up without a company; a personal workspace is created.',
+            )}
+          </li>
+          <li>
+            {text(
+              'Proje oluşturun, manuel profili ve taslağı düzenleyin. AI sohbeti isteğe bağlıdır.',
+              'Create a project and edit its profile and draft manually. AI conversation is optional.',
+            )}
+          </li>
+          <li>
+            {text(
+              'Kaydedilen profili onaylayın ve ücretsiz genel taslağı PDF / DOCX indirin.',
+              'Confirm the saved profile and download the free general draft as PDF / DOCX.',
+            )}
+          </li>
+          <li>
+            {text(
+              'Resmî kaynaklı seçili fonları keşfedin. Katalog dünya çapında eksiksiz değildir.',
+              'Discover selected officially sourced programs. The catalog is not globally comprehensive.',
+            )}
+          </li>
+          <li>
+            {text(
+              'Pro ile sürümlü uygunluk kontrolü, başvuru bütçesi, belge incelemesi ve onay sürecini kullanın. Portala kendiniz gönderin.',
+              'With Pro, use versioned eligibility checks, application budgets, document review and approvals. Submit to the official portal yourself.',
+            )}
+          </li>
+        </ol>
+      </section>
+      <section className="panel">
+        <h2>{text('Güvenilirlik ve sınırlar', 'Trust and boundaries')}</h2>
+        <p>
+          {text(
+            'Uygunluk kuralları deterministiktir; yorum gerektiren koşullar insan incelemesine gider. Yapay zekâ fon kararı veya resmî hukuk danışmanlığı vermez. Belge yüklemek doğrulama değildir.',
+            'Eligibility rules are deterministic; interpretive conditions require human review. AI is not a grant decision or official legal advice. Uploading does not verify a document.',
+          )}
+        </p>
+        <p>
+          {text(
+            'Değişiklikler onayı geçersiz kılar; önceki değerlendirmeler geçmişte kalır. Çalışma alanları ayrı tutulur.',
+            'Edits invalidate confirmation; earlier evaluations remain historical. Workspaces are isolated.',
+          )}
+        </p>
+        <p>
+          {text(
+            'AI yapılandırma veya kota hatasında manuel çalışma sürer. Harici / yerel veri politikasını Ayarlar’da görün.',
+            'Manual work remains available after AI configuration or quota errors. See external / local data policy in Settings.',
+          )}
+        </p>
+        <p>
+          {text(
+            'Ödeme sağlayıcısı ve fiyatlandırma tamamlanmadı. Yerel yönetici Pro yetkisi ödeme değildir.',
+            'Billing and pricing are not implemented. Local admin Pro entitlement is not payment.',
+          )}
+        </p>
       </section>
     </div>
   );
-};
-
-export default Help;
+}
