@@ -17,6 +17,32 @@ from .operations import record_backup_status
 from .settings import settings
 
 
+def database_schema(database_url: str) -> str:
+    import psycopg
+
+    environment = database_environment(database_url)
+    try:
+        with psycopg.connect(
+            host=environment["PGHOST"],
+            port=environment["PGPORT"],
+            dbname=environment["PGDATABASE"],
+            user=environment["PGUSER"],
+            password=environment["PGPASSWORD"],
+            connect_timeout=10,
+        ) as connection:
+            versions = connection.execute("SELECT version_num FROM alembic_version").fetchall()
+    except psycopg.Error:
+        raise RuntimeError("Cannot read the database migration revision for backup") from None
+    if len(versions) != 1 or versions[0][0] not in {
+        "0002_workspace_product",
+        "0003_menu_security",
+        "0004_task_context",
+        "0005_project_studio",
+    }:
+        raise RuntimeError("Database migration revision is not supported for backup")
+    return versions[0][0]
+
+
 def database_environment(database_url: str) -> dict[str, str]:
     url = urlsplit(database_url.replace("postgresql+asyncpg://", "postgresql://"))
     if url.scheme != "postgresql" or not url.hostname or not url.path.strip("/"):
@@ -73,7 +99,7 @@ def backup(destination: Path) -> None:
         manifest = {
             "format": 1,
             "created_at": datetime.now(UTC).isoformat(),
-            "schema": "0004_task_context",
+            "schema": database_schema(settings.database_url),
             "requires_stopped_app_and_workers": True,
         }
         (staging / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
@@ -116,6 +142,7 @@ def restore(source: Path, target_database: str, target_storage: Path) -> None:
             "0002_workspace_product",
             "0003_menu_security",
             "0004_task_context",
+            "0005_project_studio",
         }:
             raise ValueError("Unsupported backup format or schema")
         # No --clean: a populated destination fails instead of deleting its records.

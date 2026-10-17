@@ -1,17 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Language } from '../i18n';
 import { api, errorMessage } from '../services/api';
-import type { ChatMessage, Profile, Project } from '../types';
-export function mergeProfileProposal(current: Profile, proposed: Profile): Profile {
-  return {
-    ...current,
-    company: { ...current.company, ...proposed.company },
-    project: { ...current.project, ...proposed.project },
-    team: { ...current.team, ...proposed.team },
-    extra: { ...current.extra, ...proposed.extra },
-    budget: current.budget?.items.length ? current.budget : (proposed.budget ?? current.budget),
-  };
-}
+import type { ChatMessage, Project } from '../types';
+
 export function useIdeaChat(
   project: Project,
   language: Language,
@@ -24,9 +15,6 @@ export function useIdeaChat(
   const [error, setError] = useState('');
   const [committedFailure, setCommittedFailure] = useState(false);
   const [historyUncertain, setHistoryUncertain] = useState(false);
-  const [proposal, setProposal] = useState<{ profile: Profile; profile_revision: number } | null>(
-    null,
-  );
   const controller = useRef<AbortController | null>(null);
   const performing = useRef(false);
   const failedSubmission = useRef<{ text: string; previousIds: Set<string> } | null>(null);
@@ -38,16 +26,15 @@ export function useIdeaChat(
     setInput('');
     setBusy(false);
     setError('');
-    setProposal(null);
     setCommittedFailure(false);
     setHistoryUncertain(false);
     api<{ messages: ChatMessage[] }>(`/projects/${project.id}/messages`, { signal: active.signal })
       .then((data) => {
         if (!active.signal.aborted) setMessages(data.messages);
       })
-      .catch((error) => {
+      .catch((reason) => {
         if (!active.signal.aborted) {
-          setError(errorMessage(error));
+          setError(errorMessage(reason));
           setHistoryUncertain(true);
         }
       });
@@ -56,12 +43,14 @@ export function useIdeaChat(
   const refreshMessages = async () => {
     const active = controller.current;
     if (!active || active.signal.aborted) return;
-    const data = await api<{ messages: ChatMessage[] }>(`/projects/${project.id}/messages`, {
-      signal: active.signal,
-    });
-    if (!active.signal.aborted) {
+    try {
+      const data = await api<{ messages: ChatMessage[] }>(`/projects/${project.id}/messages`, {
+        signal: active.signal,
+      });
+      if (active.signal.aborted) return;
       setMessages(data.messages);
       setHistoryUncertain(false);
+      setError('');
       const failed = failedSubmission.current;
       if (
         failed &&
@@ -76,15 +65,22 @@ export function useIdeaChat(
         setCommittedFailure(true);
       }
       failedSubmission.current = null;
+    } catch (reason) {
+      if (!active.signal.aborted) {
+        setError(errorMessage(reason));
+        setHistoryUncertain(true);
+      }
     }
   };
-  const perform = async (mode: 'chat' | 'write' | 'extract-profile') => {
+  const perform = async () => {
     const active = controller.current;
     if (
       !active ||
       active.signal.aborted ||
       performing.current ||
-      (mode === 'chat' && (!input.trim() || input.length > 12000 || historyUncertain))
+      !input.trim() ||
+      input.length > 12000 ||
+      historyUncertain
     )
       return;
     performing.current = true;
@@ -94,46 +90,25 @@ export function useIdeaChat(
     const submitted = input;
     const previousIds = new Set(messages.map((message) => message.id));
     try {
-      if (mode === 'chat') {
-        const data = await api<{ user_message: ChatMessage; message: ChatMessage }>(
-          `/projects/${project.id}/chat`,
-          { method: 'POST', json: { text: submitted, language }, signal: active.signal },
-        );
-        if (!active.signal.aborted) {
-          setMessages((items) => [
-            ...items.filter(
-              (item) => item.id !== data.user_message.id && item.id !== data.message.id,
-            ),
-            data.user_message,
-            data.message,
-          ]);
-          setInput('');
-        }
-      } else if (mode === 'write') {
-        await api(`/projects/${project.id}/write`, {
-          method: 'POST',
-          json: {
-            language,
-            instruction:
-              language === 'tr'
-                ? 'Proje açıklamasını mevcut profil ve konuşmadan yaz. Bilinmeyenleri uydurma.'
-                : 'Write a project description from the profile and conversation. Do not invent unknown facts.',
-          },
-          signal: active.signal,
-        });
-        if (!active.signal.aborted) await onChange();
-      } else {
-        const data = await api<{ profile: Profile; profile_revision: number }>(
-          `/projects/${project.id}/extract-profile`,
-          { method: 'POST', json: { language }, signal: active.signal },
-        );
-        if (!active.signal.aborted) setProposal(data);
-      }
-      if (!active.signal.aborted) await onUsage();
-    } catch (error) {
+      const data = await api<{ user_message: ChatMessage; message: ChatMessage }>(
+        `/projects/${project.id}/chat`,
+        { method: 'POST', json: { text: submitted, language }, signal: active.signal },
+      );
       if (!active.signal.aborted) {
-        setError(errorMessage(error));
-        if (mode === 'chat') failedSubmission.current = { text: submitted, previousIds };
+        setMessages((items) => [
+          ...items.filter(
+            (item) => item.id !== data.user_message.id && item.id !== data.message.id,
+          ),
+          data.user_message,
+          data.message,
+        ]);
+        setInput('');
+        await onUsage();
+      }
+    } catch (reason) {
+      if (!active.signal.aborted) {
+        setError(errorMessage(reason));
+        failedSubmission.current = { text: submitted, previousIds };
         try {
           const data = await api<{ messages: ChatMessage[] }>(`/projects/${project.id}/messages`, {
             signal: active.signal,
@@ -141,15 +116,14 @@ export function useIdeaChat(
           if (!active.signal.aborted) {
             setMessages(data.messages);
             setHistoryUncertain(false);
-            const committed =
-              mode === 'chat' &&
+            if (
               data.messages.some(
                 (message) =>
                   message.role === 'user' &&
                   message.text === submitted &&
                   !previousIds.has(message.id),
-              );
-            if (committed) {
+              )
+            ) {
               setInput('');
               setCommittedFailure(true);
             }
@@ -162,7 +136,7 @@ export function useIdeaChat(
           await onChange();
           await onUsage();
         } catch {
-          /* Keep the original operation error and local input. */
+          /* Preserve the original operation failure and local input. */
         }
       }
     } finally {
@@ -176,8 +150,6 @@ export function useIdeaChat(
     setInput,
     busy,
     error,
-    proposal,
-    setProposal,
     perform,
     committedFailure,
     historyUncertain,

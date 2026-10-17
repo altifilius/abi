@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Auth from './components/Auth';
-import Dashboard from './components/Dashboard';
 import Layout from './components/Layout';
 import NotFound from './components/NotFound';
 import { NavigationGuardProvider, useHasUnsavedChanges } from './contexts/NavigationGuard';
@@ -53,6 +52,7 @@ function ProductApplication() {
   const [application, setApplication] = useState<Application | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [entityLoading, setEntityLoading] = useState(false);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [unread, setUnread] = useState(0);
   const [linkStatus, setLinkStatus] = useState('');
   const projectsScope = useRef<object | null>(null);
@@ -117,6 +117,7 @@ function ProductApplication() {
     setProjects([]);
     setUsage(null);
     setError('');
+    setProjectsLoading(!!workspaceId && !!userId);
     if (!workspaceId || !userId) return () => controller.abort();
     savePreferences({ workspaceId });
     Promise.all([
@@ -133,6 +134,9 @@ function ProductApplication() {
       })
       .catch((reason) => {
         if (!controller.signal.aborted) setError(errorMessage(reason));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setProjectsLoading(false);
       });
     return () => controller.abort();
   }, [workspaceId, userId, workspaceScope]);
@@ -254,7 +258,7 @@ function ProductApplication() {
     setSession(value);
     if (workspaceId && !value.workspaces.some((item) => item.id === workspaceId)) {
       navigate(
-        value.workspaces[0] ? `/w/${value.workspaces[0].id}/overview` : '/account/identity',
+        value.workspaces[0] ? `/w/${value.workspaces[0].id}/projects` : '/account/identity',
         { replace: true },
       );
       return;
@@ -320,7 +324,7 @@ function ProductApplication() {
         setSession(value);
         setLinkStatus(text('Bağlantı işlendi.', 'Link processed.'));
         navigate(
-          value.workspaces[0] ? `/w/${value.workspaces[0].id}/overview` : '/account/identity',
+          value.workspaces[0] ? `/w/${value.workspaces[0].id}/projects` : '/account/identity',
           { replace: true },
         );
       })
@@ -401,7 +405,7 @@ function ProductApplication() {
     return (
       <Navigate
         replace
-        to={defaultWorkspace ? `/w/${defaultWorkspace.id}/overview` : '/account/identity'}
+        to={defaultWorkspace ? `/w/${defaultWorkspace.id}/projects` : '/account/identity'}
       />
     );
   }
@@ -431,14 +435,11 @@ function ProductApplication() {
       <Help workspace={selectedWorkspace || undefined} project={selectedProject || undefined} />
     );
   else if (!workspace) content = <NotFound workspaceId={defaultWorkspace?.id} />;
-  else if (route.menu === 'overview')
+  else if (projectsLoading && ['projects', 'funding'].includes(route.menu) && !route.projectId)
     content = (
-      <Dashboard
-        key={workspace.id}
-        workspace={workspace}
-        projects={visibleProjects}
-        usage={visibleUsage}
-      />
+      <div className="page-loading" role="status">
+        {text('Çalışma alanın hazırlanıyor…', 'Getting your workspace ready…')}
+      </div>
     );
   else if (route.menu === 'projects' && !route.projectId)
     content = (
@@ -459,9 +460,12 @@ function ProductApplication() {
     content = (
       <ProjectDetail
         key={project.id}
+        actorId={session.user.id}
         workspace={workspace}
         project={project}
         section={route.section || 'overview'}
+        aiMode={route.aiMode}
+        reportId={route.reportId}
         usage={visibleUsage}
         onProjectChanged={refreshProject}
         onUsage={refreshUsage}
@@ -540,7 +544,6 @@ function ProductApplication() {
     <Layout
       session={session}
       workspace={selectedWorkspace}
-      projects={workspace ? visibleProjects : []}
       project={selectedProject}
       route={route}
       unreadCount={unread}
@@ -552,12 +555,17 @@ function ProductApplication() {
         </p>
       )}
       {linkStatus && <p role="status">{linkStatus}</p>}
-      <Suspense
+      <div
+        className={`screen-surface${route.menu === 'projects' || route.menu === 'funding' ? ' screen-surface-workspace' : ''}`}
         key={`${route.menu}:${routeProjectId || routeApplicationId || workspaceId || userId}`}
-        fallback={<p role="status">{text('Ekran yükleniyor…', 'Loading screen…')}</p>}
       >
-        {content}
-      </Suspense>
+        <Suspense
+          key={`${route.menu}:${routeProjectId || routeApplicationId || workspaceId || userId}`}
+          fallback={<p role="status">{text('Ekran yükleniyor…', 'Loading screen…')}</p>}
+        >
+          {content}
+        </Suspense>
+      </div>
     </Layout>
   );
 }

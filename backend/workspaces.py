@@ -353,6 +353,10 @@ class CompanyProfile(ProfileFields):
 
 
 class ProjectProfile(ProfileFields):
+    country: StrictStr | None = None
+    _country = field_validator("country")(
+        lambda value: validate_country(value) if value not in {None, ""} else value
+    )
     sector: StrictStr | None = None
     stage: Literal["idea", "mvp", "scale"] | None = None
     trl: Annotated[StrictInt, Field(ge=1, le=9)] | None = None

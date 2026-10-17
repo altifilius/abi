@@ -22,6 +22,7 @@ const fields = [
   ],
   ['company', 'registration_date', 'Kuruluş tarihi', 'Registration date', 'date'],
   ['project', 'sector', 'Sektör', 'Sector', 'text'],
+  ['project', 'country', 'Proje ülkesi', 'Project country', 'country'],
   ['project', 'stage', 'Aşama', 'Stage', 'stage'],
   [
     'project',
@@ -45,77 +46,82 @@ export function ProfileFields({
   profile,
   onChange,
   disabled = false,
+  group,
 }: {
   profile: Profile;
   onChange: (profile: Profile) => void;
   disabled?: boolean;
+  group?: 'project' | 'company' | 'team';
 }) {
   const { text } = useI18n();
   return (
     <fieldset disabled={disabled} className="form-grid">
       <legend>{text('Proje bilgileri', 'Project facts')}</legend>
-      {fields.map(([section, key, tr, en, type]) => {
-        const group = profile[section] || {};
-        const value = group[key];
-        const change = (raw: string) => {
-          const next = { ...group };
-          if (raw === '') delete next[key];
-          else
-            next[key] = type === 'boolean' ? raw === 'true' : type === 'number' ? Number(raw) : raw;
-          onChange({ ...profile, [section]: next });
-        };
-        return (
-          <label key={`${section}.${key}`} htmlFor={`profile-${section}-${key}`}>
-            {text(tr, en)}
-            {type === 'textarea' ? (
-              <textarea
-                id={`profile-${section}-${key}`}
-                rows={3}
-                value={String(value ?? '')}
-                onChange={(e) => change(e.target.value)}
-              />
-            ) : ['boolean', 'country', 'stage'].includes(type) ? (
-              <select
-                id={`profile-${section}-${key}`}
-                value={String(value ?? '')}
-                onChange={(e) => change(e.target.value)}
-              >
-                <option value="">{text('Bilinmiyor', 'Unknown')}</option>
-                {(type === 'boolean'
-                  ? ['true', 'false']
-                  : type === 'country'
-                    ? [...COUNTRIES]
-                    : ['idea', 'mvp', 'scale']
-                ).map((option) => (
-                  <option key={option} value={option}>
-                    {option === 'true'
-                      ? text('Evet', 'Yes')
-                      : option === 'false'
-                        ? text('Hayır', 'No')
-                        : option}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id={`profile-${section}-${key}`}
-                type={type === 'decimal' ? 'number' : type}
-                min={
-                  type === 'number'
-                    ? key === 'trl' || key === 'duration_months'
-                      ? 1
-                      : 0
-                    : undefined
-                }
-                max={key === 'trl' ? 9 : undefined}
-                step={type === 'decimal' ? '0.01' : type === 'number' ? '1' : undefined}
-                value={String(value ?? '')}
-                onChange={(e) => change(e.target.value)}
-              />
-            )}
-          </label>
-        );
-      })}
+      {fields
+        .filter(([section]) => !group || section === group)
+        .map(([section, key, tr, en, type]) => {
+          const group = profile[section] || {};
+          const value = group[key];
+          const change = (raw: string) => {
+            const next = { ...group };
+            if (raw === '') delete next[key];
+            else
+              next[key] =
+                type === 'boolean' ? raw === 'true' : type === 'number' ? Number(raw) : raw;
+            onChange({ ...profile, [section]: next });
+          };
+          return (
+            <label key={`${section}.${key}`} htmlFor={`profile-${section}-${key}`}>
+              {text(tr, en)}
+              {type === 'textarea' ? (
+                <textarea
+                  id={`profile-${section}-${key}`}
+                  rows={3}
+                  value={String(value ?? '')}
+                  onChange={(e) => change(e.target.value)}
+                />
+              ) : ['boolean', 'country', 'stage'].includes(type) ? (
+                <select
+                  id={`profile-${section}-${key}`}
+                  value={String(value ?? '')}
+                  onChange={(e) => change(e.target.value)}
+                >
+                  <option value="">{text('Bilinmiyor', 'Unknown')}</option>
+                  {(type === 'boolean'
+                    ? ['true', 'false']
+                    : type === 'country'
+                      ? [...COUNTRIES]
+                      : ['idea', 'mvp', 'scale']
+                  ).map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'true'
+                        ? text('Evet', 'Yes')
+                        : option === 'false'
+                          ? text('Hayır', 'No')
+                          : option}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id={`profile-${section}-${key}`}
+                  type={type === 'decimal' ? 'number' : type}
+                  min={
+                    type === 'number'
+                      ? key === 'trl' || key === 'duration_months'
+                        ? 1
+                        : 0
+                      : undefined
+                  }
+                  max={key === 'trl' ? 9 : undefined}
+                  step={type === 'decimal' ? '0.01' : type === 'number' ? '1' : undefined}
+                  value={String(value ?? '')}
+                  onChange={(e) => change(e.target.value)}
+                />
+              )}
+            </label>
+          );
+        })}
     </fieldset>
   );
 }
@@ -137,7 +143,7 @@ export default function ProfileScreen({
   const [saved, setSaved] = useState(false);
   return (
     <div className="stack">
-      <h2>{text('Proje profili', 'Project profile')}</h2>
+      <h2>{text('Proje kapsamı', 'Project scope')}</h2>
       <p>
         {text(
           'Bilinmeyen alanları boş bırakın; bilinmiyor, hayır anlamına gelmez. Şirket kurulması zorunlu değildir.',
@@ -145,15 +151,15 @@ export default function ProfileScreen({
         )}
       </p>
       {readOnly && <p className="notice">{text('Salt okunur erişim', 'Read-only access')}</p>}
-      <p className="notice">
-        {text('Revizyon', 'Revision')} {project.revision} ·{' '}
-        {project.confirmed_revision === project.revision
-          ? text('Onaylandı', 'Confirmed')
-          : text(
-              'Değerlendirme için kayıtlı profil onayı gerekli',
-              'Confirm the saved profile before evaluation',
-            )}
-      </p>
+      <details className="quiet-details">
+        <summary>{text('Kayıt ve onay bilgisi', 'Revision and confirmation')}</summary>
+        <p>
+          {text('Revizyon', 'Revision')} {project.revision} ·{' '}
+          {project.confirmed_revision === project.revision
+            ? text('Kapsam onaylı', 'Scope confirmed')
+            : text('Kaydedilmiş kapsamı onayla', 'Confirm the saved scope')}
+        </p>
+      </details>
       {state.conflict && (
         <section className="notice" role="alert">
           <p>
@@ -213,9 +219,9 @@ export default function ProfileScreen({
             />
           </label>
           <label>
-            {text('Proje açıklaması / genel taslak', 'Project description / general draft')}
+            {text('Kısa proje kapsamı', 'Project scope summary')}
             <textarea
-              rows={8}
+              rows={4}
               maxLength={100000}
               value={state.draft.description}
               onChange={(e) => state.setDraft({ ...state.draft, description: e.target.value })}
@@ -223,18 +229,39 @@ export default function ProfileScreen({
           </label>
         </fieldset>
         <ProfileFields
+          group="project"
           profile={state.draft.profile}
           disabled={readOnly || busy}
           onChange={(profile) => state.setDraft({ ...state.draft, profile })}
         />
+        <details className="scope-additional-facts">
+          <summary>{text('Şirket ve ekip bilgileri', 'Company and team facts')}</summary>
+          <div className="stack">
+            <ProfileFields
+              group="company"
+              profile={state.draft.profile}
+              disabled={readOnly || busy}
+              onChange={(profile) => state.setDraft({ ...state.draft, profile })}
+            />
+            <ProfileFields
+              group="team"
+              profile={state.draft.profile}
+              disabled={readOnly || busy}
+              onChange={(profile) => state.setDraft({ ...state.draft, profile })}
+            />
+          </div>
+        </details>
         {workspace.plan === 'pro' && (
-          <ProgramQuestions
-            workspace={workspace}
-            project={project}
-            profile={state.draft.profile}
-            disabled={readOnly || busy}
-            onChange={(profile) => state.setDraft({ ...state.draft, profile })}
-          />
+          <details className="scope-additional-facts">
+            <summary>{text('Desteklere özel ek bilgiler', 'Additional funding facts')}</summary>
+            <ProgramQuestions
+              workspace={workspace}
+              project={project}
+              profile={state.draft.profile}
+              disabled={readOnly || busy}
+              onChange={(profile) => state.setDraft({ ...state.draft, profile })}
+            />
+          </details>
         )}
         {!readOnly && (
           <div className="actions">

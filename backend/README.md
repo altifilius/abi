@@ -18,7 +18,7 @@ make dev
 
 Python ortamı `.venv-menu`; FastAPI üretim build'ini ve `/api` uçlarını `http://127.0.0.1:8001` üzerinden sunar. Vite geliştirme sunucusu `make dev-frontend` ile 3000 portunda açılır ve `/api` isteklerini 8001'e yönlendirir.
 
-Şemanın tek otoritesi Alembic'tir. Güncel revision `0004_task_context`; uygulama açılışta tablo oluşturmaz ve eski şemayı kabul etmez. Mevcut kayıtları silerek veya revision damgasını değiştirerek bu kontrolü atlamayın.
+Şemanın tek otoritesi Alembic'tir. Güncel revision `0005_project_studio`; yeni rapor/konuşma/fon seçim tabloları eklenir, önceki proje ve başvuru kayıtları değişmez. Uygulama açılışta tablo oluşturmaz; revision damgasını değiştirerek bu kontrolü atlamayın.
 
 ## Servis ayarları
 
@@ -26,7 +26,8 @@ Python ortamı `.venv-menu`; FastAPI üretim build'ini ve `/api` uçlarını `ht
 - AI sağlayıcısı ve modeli açıkça yapılandırılır. Çalışma alanının `local` politikası haricî sağlayıcıya sessiz geçiş yapmaz.
 - Özel dosyalar `STORAGE_ROOT` altında, webroot dışında saklanır. OCR yerel Tesseract ve yapılandırılmış dil verilerini kullanır.
 - `GET /api/health` process canlılığıdır; `GET /api/ready` DB/depo hazırlığını ve diğer servislerin ayrı durumlarını verir.
-- Kalıcı e-posta/hatırlatma işçisi `make reminders` ile çalışır; yapılandırma tek başına başarılı teslimat değildir.
+- E-posta/hatırlatma işçisi `make reminders`, günlük kaynak izleyicisi `.venv-menu/bin/python -m backend.funding watch --interval 86400` ile çalışır. Kalıcı kullanıcı systemd kurulumu ve log komutları [ana README](../README.md#kalıcı-arka-plan-işçileri) içindedir; yapılandırma veya çalışan process tek başına başarılı iş/teslimat değildir.
+- `backend/project_reports.py` raporların ayrı konuşma ve revizyonlarını; `backend/report_documents.py` allowlist zengin belge doğrulamasını ve gerçek Unicode PDF/DOCX üretimini; `backend/discovery.py` kaynaklı ülke/katılım yolu ayrımını ve proje fon seçimlerini yürütür. Hazırlık raporu eski insan onaylı başvurunun yerine sessizce yazılmaz.
 
 ## Rapor ingestion ve doğrulama
 

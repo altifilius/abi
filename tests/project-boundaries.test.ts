@@ -2,7 +2,6 @@ import { describe, expect, it } from 'bun:test';
 import { profileFieldValue, updateProfileField } from '../components/ProgramQuestions';
 import { projectBudgetTotal } from '../components/ProjectBudget';
 import { compareProjectSnapshots } from '../components/ProjectHistory';
-import { mergeProfileProposal } from '../hooks/useIdeaChat';
 import { reconcileProjectDraft } from '../hooks/useProjectState';
 import type { Project } from '../types';
 
@@ -85,17 +84,6 @@ describe('Project edits across authoritative revision changes', () => {
     };
     const newer = { ...base, revision: 3, title: 'Current server facts' };
     expect(reconcileProjectDraft(base, reordered, newer)).toEqual({ base: newer, draft: newer });
-  });
-  it('an AI proposal cannot silently delete manual budget, unknown facts or explicit false', () => {
-    const proposed = {
-      company: { name: 'Proposed company' },
-      budget: { currency: 'EUR', items: [] },
-      extra: {},
-    };
-    const merged = mergeProfileProposal(base.profile, proposed);
-    expect(merged.budget).toEqual(base.profile.budget);
-    expect(merged.company).toEqual({ country: 'TR', is_sme: true, name: 'Proposed company' });
-    expect(profileFieldValue(merged, 'extra.source_answers.qualified')).toBe(false);
   });
   it('clearing an answer means unknown and does not coerce false or Decimal strings', () => {
     const answered = updateProfileField(

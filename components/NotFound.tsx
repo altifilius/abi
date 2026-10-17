@@ -12,8 +12,8 @@ export default function NotFound({ workspaceId }: { workspaceId?: string }) {
           'The link may be invalid or you may not have permission to access this record. Data from another workspace is never substituted.',
         )}
       </p>
-      <Link to={workspaceId ? `/w/${workspaceId}/overview` : '/'}>
-        {text('Çalışma alanına dön', 'Return to workspace')}
+      <Link to={workspaceId ? `/w/${workspaceId}/projects` : '/'}>
+        {text('Projelerime dön', 'Return to my projects')}
       </Link>
     </section>
   );

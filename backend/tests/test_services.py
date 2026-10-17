@@ -1,3 +1,4 @@
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -115,8 +116,8 @@ class ProviderBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_semantic_refusal_and_whitespace_are_not_chat_success(self):
         for response in [
-            {"reply": "cannot perform", "refused": True},
-            {"reply": "  ", "refused": False},
+            {"body": "cannot perform", "next_question": None, "refused": True},
+            {"body": "  ", "next_question": None, "refused": False},
         ]:
             with (
                 patch("backend.services.chat.call_llm", AsyncMock(return_value=response)),
@@ -143,6 +144,181 @@ class ProviderBoundaryTests(unittest.IsolatedAsyncioTestCase):
             self.assertRaises(AIProviderError),
         ):
             await embed_text(["first", "second"], policy="local")
+
+
+class MentorConversationTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.create = AsyncMock()
+        client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=self.create))
+        )
+        config_patch = patch(
+            "backend.services.llm.get_ai_config",
+            return_value=AIConfig("local", "model", "http://localhost", "token"),
+        )
+        client_patch = patch("backend.services.llm.get_ai_client", return_value=client)
+        self.config = config_patch.start()
+        self.addCleanup(config_patch.stop)
+        client_patch.start()
+        self.addCleanup(client_patch.stop)
+
+    async def test_provider_body_and_one_question_are_composed_without_rewriting(self):
+        examples = (
+            (
+                "en",
+                "You want to help small bakeries reduce waste. A short trial can test demand before building software.",
+                "How do those bakeries handle unsold stock today?",
+            ),
+            (
+                "tr",
+                "Küçük fırınların israfını azaltmak istiyorsun. Yazılım geliştirmeden önce küçük bir denemeyle ihtiyacı sınayabilirsin.",
+                "Bu fırınlar elde kalan ürünleri bugün nasıl değerlendiriyor?",
+            ),
+        )
+        history = [
+            {"role": "user", "text": "I want to help small bakeries reduce waste in Turkey."}
+        ]
+        for language, body, question in examples:
+            with self.subTest(language=language):
+                self.create.return_value = completion(
+                    json.dumps(
+                        {"body": f"  {body}  ", "next_question": f" {question} ", "refused": False}
+                    )
+                )
+                reply = await run_idea_chat(
+                    history,
+                    policy="local",
+                    language=language,
+                    project_context='{"country": "TR"}',
+                )
+                self.assertEqual(reply, f"{body}\n\n{question}")
+                self.assertEqual(reply.count("?"), 1)
+
+    async def test_one_choice_question_is_not_mistaken_for_multiple_questions(self):
+        for question in (
+            "Türkiye veya Almanya mı?",
+            "Will you sell locally or export?",
+            "Bu denemeyi hangi fırınla yapacaksın?",
+            "Bu fırınla konuşma öncesi, ne tür bilgiler hazırlamalısın?",
+            "Before speaking to the bakery, what information should you prepare?",
+            "Fırın sahibi, hangi ürünü en çok satıyor?",
+        ):
+            with self.subTest(question=question):
+                self.create.return_value = completion(
+                    json.dumps(
+                        {
+                            "body": "İlk denemeyi küçük tutabiliriz.",
+                            "next_question": question,
+                            "refused": False,
+                        }
+                    )
+                )
+                reply = await run_idea_chat([], policy="local", language="tr")
+                self.assertEqual(reply, f"İlk denemeyi küçük tutabiliriz.\n\n{question}")
+
+    async def test_null_follow_up_preserves_body_without_adding_a_question(self):
+        body = "A small trial lets you test the idea before building software."
+        self.create.return_value = completion(
+            json.dumps({"body": body, "next_question": None, "refused": False})
+        )
+        reply = await run_idea_chat([], policy="local", language="en")
+        self.assertEqual(reply, body)
+
+    async def test_question_lists_compounds_and_invalid_fields_fail_not_truncate(self):
+        valid = {
+            "body": "Testing demand first can save development effort.",
+            "next_question": "Who is your first customer?",
+            "refused": False,
+        }
+        invalid = [
+            {},
+            {key: value for key, value in valid.items() if key != "body"},
+            {key: value for key, value in valid.items() if key != "next_question"},
+            {key: value for key, value in valid.items() if key != "refused"},
+            {**valid, "reply": "obsolete unstructured output"},
+            {**valid, "body": None},
+            {**valid, "body": "  "},
+            {**valid, "body": "Who buys it? What do they pay?"},
+            {**valid, "body": "Can you clarify\uff1f"},
+            {**valid, "body": "Which customer buys it\u061f"},
+            {**valid, "refused": True},
+            {**valid, "refused": "false"},
+            {**valid, "next_question": []},
+        ]
+        for question in (
+            "",
+            "  ",
+            "Who is your customer",
+            "Who is your customer? What do they pay?",
+            "Who buys it\u061f What do they pay?",
+            "Who is your customer and what do they pay?",
+            "Müşterin kim ve ne kadar öder?",
+            "Who buys it, what do they pay?",
+            "Who buys it; what do they pay?",
+            "Who buys it / what do they pay?",
+            "Who buys it\nwhat do they pay?",
+            "1. Who buys it?",
+            "- Who buys it?",
+            "Who buys it. What do they pay?",
+        ):
+            invalid.append({**valid, "next_question": question})
+        for response in invalid:
+            with self.subTest(response=response), self.assertRaises(AIProviderError):
+                self.create.return_value = completion(json.dumps(response))
+                await run_idea_chat([], policy="local")
+
+    async def test_provider_refusal_truncation_and_failure_still_propagate(self):
+        for response in (
+            completion("{}", refusal="blocked"),
+            completion("{}", finish_reason="length"),
+            completion(""),
+        ):
+            with self.subTest(response=response), self.assertRaises(AIProviderError):
+                self.create.return_value = response
+                await run_idea_chat([], policy="local")
+        with (
+            patch(
+                "backend.services.chat.call_llm",
+                side_effect=AIProviderError("provider unavailable"),
+            ),
+            self.assertRaisesRegex(AIProviderError, "provider unavailable"),
+        ):
+            await run_idea_chat([], policy="local")
+
+    async def test_write_mode_keeps_full_sectioned_draft_without_chat_limits(self):
+        sections = {
+            "title": "Bakery waste pilot",
+            "problem_solution": "Unsold stock can become waste. Test a reservation service with one bakery.",
+            "innovation": "Differentiation is not established; compare existing alternatives.",
+            "objectives": "Learn whether customers reserve products and collect them.",
+            "methodology": "Agree a small pilot. Track reservations, collections and feedback.",
+            "missing_information": "Which bakery? What baseline should be measured?",
+            "refused": False,
+        }
+        self.create.return_value = completion(json.dumps(sections))
+        reply = await run_idea_chat([], policy="local", mode="write", language="en")
+        self.assertEqual(
+            reply,
+            "\n\n".join(
+                f"{label}\n{sections[field]}"
+                for label, field in (
+                    ("Project title", "title"),
+                    ("Problem and solution", "problem_solution"),
+                    ("Innovation", "innovation"),
+                    ("Objectives", "objectives"),
+                    ("Methodology", "methodology"),
+                    ("Missing information", "missing_information"),
+                )
+            ),
+        )
+        for response in (
+            {**sections, "refused": True},
+            {**sections, "methodology": "  "},
+            {key: value for key, value in sections.items() if key != "title"},
+        ):
+            with self.subTest(response=response), self.assertRaises(AIProviderError):
+                self.create.return_value = completion(json.dumps(response))
+                await run_idea_chat([], policy="local", mode="write")
 
 
 class EvidenceBoundaryTests(unittest.TestCase):

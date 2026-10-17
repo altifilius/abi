@@ -14,12 +14,18 @@ export default function Auth({ onSession }: { onSession: (session: Session) => v
   return (
     <main className="auth-screen">
       <section className="panel">
-        <h1>Abi</h1>
-        <h2>{text('Projenizi geliştirin', 'Develop your project')}</h2>
+        <div className="auth-brand">
+          <span>✧</span>
+          <strong>
+            abi<span className="brand-dot">.</span>
+          </strong>
+        </div>
+        <p className="eyebrow">{text('FİKRİNE YER AÇ', 'MAKE ROOM FOR YOUR IDEA')}</p>
+        <h1>{text('Güzel fikirler, birlikte büyür.', 'Good ideas grow together.')}</h1>
         <p>
           {text(
-            'Şirket kurmadan kişisel hesap açabilirsiniz. Ücretsiz profil, taslak ve fon keşfi.',
-            'No company required. Free profiles, drafts and funding discovery.',
+            'Fikrini netleştir. Raporlarını birlikte yaz. Projene uygun desteği keşfet.',
+            'Give your idea clarity. Shape your reports. Find the support to move forward.',
           )}
         </p>
         <label>

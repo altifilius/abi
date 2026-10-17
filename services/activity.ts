@@ -43,6 +43,8 @@ export function activityDestination(event: {
   if (!event.workspace_id) return '/notifications';
   const root = `/w/${encodeURIComponent(event.workspace_id)}`;
   const detail = event.detail || {};
+  if (typeof detail.report_id === 'string' && event.project_id)
+    return `${root}/projects/${encodeURIComponent(event.project_id)}/reports/${encodeURIComponent(detail.report_id)}`;
   if (typeof detail.application_id === 'string')
     return `${root}/applications/${encodeURIComponent(detail.application_id)}/${event.event_type.includes('review') ? 'review' : 'overview'}`;
   if (typeof detail.document_id === 'string')
@@ -53,5 +55,5 @@ export function activityDestination(event: {
     return `${root}/funding/calls/${encodeURIComponent(detail.call_id)}`;
   if (event.project_id && event.event_type !== 'project.deleted')
     return `${root}/projects/${encodeURIComponent(event.project_id)}/${event.event_type.startsWith('funding.') ? 'eligibility' : 'overview'}`;
-  return `${root}/overview`;
+  return `${root}/workspace/activity`;
 }

@@ -1,0 +1,17 @@
+[Unit]
+Description=Abi official source watcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/emre/Projects/abi
+ExecStart=/home/emre/Projects/abi/.venv-menu/bin/python -m backend.funding watch --interval 86400
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

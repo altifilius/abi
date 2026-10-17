@@ -1,7 +1,6 @@
 export const PROJECT_SECTIONS = [
   'overview',
   'profile',
-  'conversation',
   'draft',
   'budget',
   'eligibility',
@@ -23,13 +22,13 @@ export const WORKSPACE_SECTIONS = [
   'usage',
   'privacy',
   'incorporation',
+  'activity',
 ] as const;
 export const ACCOUNT_SECTIONS = ['identity', 'security', 'preferences', 'privacy'] as const;
 export const ADMIN_SECTIONS = ['sources', 'programs', 'entitlements', 'operations'] as const;
 
 export interface ProductRoute {
   menu:
-    | 'overview'
     | 'projects'
     | 'funding'
     | 'applications'
@@ -44,6 +43,8 @@ export interface ProductRoute {
     | 'help'
     | 'auth'
     | 'not-found';
+  reportId?: string;
+  aiMode?: 'idea' | 'reports';
   workspaceId?: string;
   projectId?: string;
   applicationId?: string;
@@ -81,11 +82,30 @@ export function parseProductRoute(pathname: string): ProductRoute {
   const menu = parts[2];
   if (
     parts.length === 3 &&
-    ['overview', 'projects', 'funding', 'applications', 'documents', 'tasks', 'calendar'].includes(
-      menu,
-    )
+    ['projects', 'funding', 'applications', 'documents', 'tasks', 'calendar'].includes(menu)
   )
     return { menu: menu as ProductRoute['menu'], workspaceId };
+  if (
+    parts.length === 6 &&
+    menu === 'projects' &&
+    parts[4] === 'ai' &&
+    ['idea', 'reports'].includes(parts[5])
+  )
+    return {
+      menu: 'projects',
+      workspaceId,
+      projectId: parts[3],
+      section: 'ai',
+      aiMode: parts[5] as 'idea' | 'reports',
+    };
+  if (parts.length === 6 && menu === 'projects' && parts[4] === 'reports')
+    return {
+      menu: 'projects',
+      workspaceId,
+      projectId: parts[3],
+      section: 'report',
+      reportId: parts[5],
+    };
   if (
     parts.length === 5 &&
     menu === 'projects' &&

@@ -23,5 +23,5 @@ async def init_db() -> None:
 
     async with engine.connect() as conn:
         version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
-        if version != "0004_task_context":
+        if version != "0005_project_studio":
             raise RuntimeError("Database migrations are required: make migrate")

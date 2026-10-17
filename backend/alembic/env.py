@@ -14,9 +14,11 @@ import backend.account
 import backend.ai
 import backend.applications
 import backend.collaboration
+import backend.discovery
 import backend.funding
 import backend.models
 import backend.operations
+import backend.project_reports
 import backend.reminders
 import backend.workspaces  # noqa: F401
 from backend.db import Base

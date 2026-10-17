@@ -1,5 +1,33 @@
 # Değişiklikler
 
+## Devam ve teslimat doğrulaması
+
+- Kapanmış yerel web ve AI süreçleri mevcut yapılandırmayla yeniden başlatıldı; ana hazırlık yanıtı `ready: true, degraded: false` oldu. Mevcut veritabanı, özel belgeler ve `.env` dosyaları korunur.
+- 27 frontend ve ayrı migration'lı PostgreSQL üzerinde 165 backend testi, lint, TypeScript ve üretim build'i yeniden geçti. Masaüstü/mobil kapsam onayı, rapor seçimi, otomatik kayıt/yenileme, gerçek Unicode PDF/DOCX ve kaynaklı destek keşfi tarayıcıda çalıştırıldı.
+- Yerel tarayıcı kanıtları Git dışında tutulur. Tek-soru biçimi, verilmiş bilgiyi yeniden sorma veya örnek yanıtı kopyalama gibi model kalite sınırlarının çözüldüğü anlamına gelmez.
+
+## Ekrana sığan çalışma alanı ve tek-soru danışmanı
+
+- Ekran yüksekliğine bağlı uygulama kabuğu; uzun sohbet/belge/sonuç listelerinde panel içi kaydırma, mobil sohbet/kapsam ve sohbet/belge geçişleri. Kısa/yatay ekranda mesaj kutusu ve indirme/filtre seçenekleri erişilebilir kalır.
+- Fikir sohbetinde bağlama göre iş geliştirme yönlendirmesi; kısa yanıt ve tek soru için yapısal sağlayıcı sözleşmesi. Bozuk/çoklu sorular kesilip başarı gösterilmez; hata/kota iadesi korunur.
+- Daha kompakt başlık, seçim ve indirme araçları; kapsam hatası ilgili panelde görünür. Otomatik kayıt, PDF/DOCX indirme, kaydetme hatasında metin/çıkış koruması ve klavyeyle rapor çekmecesi gerçek tarayıcıda doğrulandı.
+
+## Sade proje deneyimi ve konuşmalı rapor stüdyosu
+
+- Sol menü kaldırıldı; iki ana giriş Projelerim / Destek bul, hesap/bildirim üst çubuğu, kompakt aranabilir proje kartları ve doğrudan fikir sohbetiyle yeni proje.
+- Proje dosyası / AI ayrımı, tek açık belge grubu, çoklu fon grupları, bağlamsal yapılacaklar/tarihler; eski bütçe, belge, uygunluk, inceleme ve final paket işlevleri ilgili projenin içinde korunur.
+- Beş iki dilli hazır rapor şablonu; her rapora ayrı kalıcı sohbet; başlık seçimi ve soldan çoklu toggle paneli. AI taslakları yalnız sohbette kalır; açık uygulama talimatı kayıtlı bölüme yazabilir, sonraki başlık kullanıcıya aittir.
+- Tiptap zengin editör, otomatik kayıt, güvenli şablon özelleştirme, stale-scope/report koruması, gerçek biçimlendirilmiş Unicode PDF/DOCX. Soft-break biçimlendirme, rowspan ve uzun tablo PDF sayfalama sınırları kapsanır.
+- Kaynaklı proje ülkesine göre yurt içi / yurt dışı; doğrudan başvuru / yabancı yapılanma alt yolları. Bilinmeyen veya yayımlanmamış kurallar kesin uygunluk sayılmaz; seçilen kaynaklar yalnız hazırlık grubu ekler.
+- Eklemeli `0005_project_studio` migration öncesi DB+dosya yedeği alındı; mevcut proje kaydının hash'i ve `.env` dosyaları geçişte korundu.
+- Kayıt hatasında yerel metin ve çıkış engeli, biçimlendirilmiş soft-break, tablo rowspan/sayfalama ve kayıt sonrası kapsam geçişi doğrulandı. Yedek manifesti artık kod sürümünü varsaymak yerine gerçek Alembic revision'ını veritabanından okur.
+
+## Kalıcı arka plan işçileri
+
+- Günlük resmî kaynak kontrolü için `abi-source-watch.service` eklendi; mevcut 60 saniyelik hatırlatma/e-posta servisiyle birlikte kullanıcı systemd yöneticisine kuruldu ve etkinleştirildi.
+- Gerçek kaynak kontrolünde 12 programdan 11'i yeni inceleme taslağı üretti, biri değişmedi, kaynak hatası olmadı; otomatik yayın yapılmadı. İki işçinin başarılı heartbeat'iyle yerel `/api/ready` yanıtı `ready: true, degraded: false` oldu.
+- Kurulum, durum/log okuma, durdurma ve bağımlılık/linger sınırları README'ye eklendi. SMTP yapılandırması veya haricî AI ayarı başarılı teslimat/çağrı olarak gösterilmez.
+
 ## Geliştirme kopyalarının birleştirilmesi
 
 - `upgrade/workspace-build` çalışma alanı yükseltmesi GitHub’a yayımlandı ve `abi` içindeki `upgrade/menu-workspace-execution` dalına pull ile alındı. Daha yeni menü, hesap, lazy-loading ve `0004_task_context` davranışları korundu.

@@ -15,6 +15,14 @@ export class ApiError extends Error {
 }
 export function clearSession() {
   csrfToken = '';
+  try {
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith('abi:report-draft:') || key.startsWith('abi:report-chat:'))
+        sessionStorage.removeItem(key);
+    }
+  } catch {
+    /* A blocked browser store cannot retain newly written report drafts. */
+  }
 }
 export async function getCsrf(signal?: AbortSignal): Promise<Session> {
   const session = await apiRequest<Session>('/auth/session', { signal });

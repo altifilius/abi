@@ -114,7 +114,17 @@ async def health():
 
 
 # Routers are loaded before the SPA fallback so private API errors stay API errors.
-from . import account, ai, applications, collaboration, funding, menu_api, workspaces  # noqa: E402
+from . import (  # noqa: E402
+    account,
+    ai,
+    applications,
+    collaboration,
+    discovery,
+    funding,
+    menu_api,
+    project_reports,
+    workspaces,
+)
 
 for router in (
     workspaces.router,
@@ -124,6 +134,8 @@ for router in (
     ai.router,
     account.router,
     menu_api.router,
+    project_reports.router,
+    discovery.router,
 ):
     app.include_router(router)
 

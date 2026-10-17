@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { ArrowRight, Ellipsis, FolderOpen, Plus, Search, Sparkles, X } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useUnsavedChanges } from '../contexts/NavigationGuard';
 import { useI18n } from '../i18n';
 import { api, errorMessage } from '../services/api';
 import { canEditWorkspace } from '../services/navigation';
 import type { Project, Workspace } from '../types';
+
 export default function ProjectList({
   workspace,
   projects,
@@ -17,201 +19,257 @@ export default function ProjectList({
   const { text, language } = useI18n();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const query = params.get('q') || '';
-  const [title, setTitle] = useState('');
-  const [created, setCreated] = useState<Project | null>(null);
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [deleting, setDeleting] = useState<Project | null>(null);
   const [confirmation, setConfirmation] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [error, setError] = useState('');
+  const query = params.get('q') || '';
   const canEdit = canEditWorkspace(workspace.role);
   const canDelete = workspace.role === 'admin' || workspace.role === 'owner';
-  useUnsavedChanges(!!title.trim(), () => setTitle(''));
+  const base = `/w/${workspace.id}/projects`;
   const visible = projects.filter((project) =>
     `${project.title} ${project.description}`
       .toLocaleLowerCase()
       .includes(query.toLocaleLowerCase()),
   );
+  const createProject = async () => {
+    if (creatingRef.current || !canEdit) return;
+    creatingRef.current = true;
+    setCreating(true);
+    setError('');
+    let created: Project | null = null;
+    try {
+      created = await api<Project>(`/workspaces/${workspace.id}/projects`, {
+        method: 'POST',
+        json: { title: text('Yeni fikrim', 'My new idea') },
+      });
+      navigate(`${base}/${created.id}/ai/idea`);
+      await onChanged();
+    } catch (reason) {
+      if (created) navigate(`${base}/${created.id}/ai/idea`);
+      else setError(errorMessage(reason));
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
+    }
+  };
   return (
-    <div className="stack">
-      <h1>{text('Projeler', 'Projects')}</h1>
-      <label>
-        {text('Projelerde ara', 'Search projects')}
+    <div className="projects-screen page-enter">
+      <header className="projects-heading">
+        <div>
+          <p className="eyebrow">{text('FİKRİNE YER AÇ', 'MAKE ROOM FOR YOUR IDEAS')}</p>
+          <h1>
+            {text('Projelerim', 'My projects')}
+            <span className="heading-dot">.</span>
+          </h1>
+          <p className="page-subtitle">
+            {text(
+              'Düşündüğün yerden, bir sonraki adıma.',
+              'From where you left off to what comes next.',
+            )}
+          </p>
+        </div>
+        {canEdit && (
+          <button className="primary" disabled={creating} onClick={() => void createProject()}>
+            <Plus size={18} />
+            {creating ? text('Açılıyor…', 'Opening…') : text('Yeni proje', 'New project')}
+          </button>
+        )}
+      </header>
+      <div className="project-search-wrap">
+        <Search size={19} aria-hidden="true" />
+        <label className="sr-only" htmlFor="project-search">
+          {text('Projelerinde ara', 'Search your projects')}
+        </label>
         <input
+          id="project-search"
           type="search"
           value={query}
-          onChange={(e) => {
+          placeholder={text('Projelerinde ara…', 'Search your projects…')}
+          onChange={(event) => {
             const next = new URLSearchParams(params);
-            if (e.target.value) next.set('q', e.target.value);
+            if (event.target.value) next.set('q', event.target.value);
             else next.delete('q');
             setParams(next, { replace: true });
           }}
         />
-      </label>
-      {canEdit && (
-        <form
-          className="panel"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (busy || !title.trim()) return;
-            setBusy(true);
-            setError('');
-            try {
-              const project = await api<Project>(`/workspaces/${workspace.id}/projects`, {
-                method: 'POST',
-                json: { title: title.trim() },
-              });
-              setTitle('');
-              setCreated(project);
-              await onChanged();
-            } catch (error) {
-              setError(errorMessage(error));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <h2>{text('Yeni proje', 'New project')}</h2>
-          <p>
-            {text(
-              'Şirket kurmadan kişisel proje oluşturabilirsiniz. Proje adı ve bilgileri profil bölümünden düzenlenir.',
-              'You can create a personal project without incorporating a company. Rename and edit facts in its profile section.',
-            )}
-          </p>
-          <label>
-            {text('Proje adı', 'Project name')}
-            <input
-              required
-              maxLength={200}
-              value={title}
-              disabled={busy}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </label>
-          <button className="primary" disabled={busy || !title.trim()}>
-            {text('Proje oluştur', 'Create project')}
+        {query && (
+          <button
+            className="icon-button"
+            aria-label={text('Aramayı temizle', 'Clear search')}
+            onClick={() => setParams({})}
+          >
+            <X size={16} />
           </button>
-        </form>
-      )}
-      {created && (
-        <p role="status">
-          {text('Proje oluşturuldu', 'Project created')}:{' '}
-          <Link to={`/w/${workspace.id}/projects/${created.id}/overview`}>{created.title}</Link>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="error">
+          {error}
         </p>
       )}
       {!canEdit && (
-        <p className="notice">
+        <p className="quiet-notice">
           {text(
-            'Salt okunur: projeleri açabilir ve kayıtlı içerikleri görüntüleyebilirsiniz.',
-            'Read-only: open projects and view their saved content.',
+            'Bu alanda kayıtlı projeleri görüntüleyebilirsin.',
+            'You have read-only access to the saved projects in this workspace.',
           )}
         </p>
       )}
-      <section className="panel">
-        <h2>{text('Proje listesi', 'Project list')}</h2>
-        {visible.length === 0 && (
-          <p>
-            {query
-              ? text('Aramayla eşleşen proje yok.', 'No projects match the search.')
-              : text('Henüz proje yok.', 'No projects yet.')}
-          </p>
-        )}
-        <ul className="stack">
-          {visible.map((project) => (
-            <li key={project.id}>
-              <div>
-                <Link to={`/w/${workspace.id}/projects/${project.id}/overview`}>
-                  <strong>{project.title}</strong>
+      {visible.length ? (
+        <ul className="project-grid">
+          {visible.map((project, index) => {
+            const confirmed = project.confirmed_revision === project.revision;
+            const started =
+              !!project.description || Object.keys(project.profile.project || {}).length > 0;
+            const summary = String(
+              project.profile.project?.problem ||
+                project.description ||
+                text(
+                  'Her proje bir konuşmayla başlar. Fikrini birlikte netleştirelim.',
+                  'Every project starts with a conversation. Let’s give your idea a little clarity.',
+                ),
+            );
+            return (
+              <li
+                className="project-card"
+                key={project.id}
+                style={{ '--project-color': `var(--project-${index % 5})` } as CSSProperties}
+              >
+                <Link className="project-card-main" to={`${base}/${project.id}/overview`}>
+                  <span className="project-card-top">
+                    <span className="project-symbol" aria-hidden="true">
+                      {project.title.trim().slice(0, 1).toLocaleUpperCase()}
+                    </span>
+                    <span className="project-updated">
+                      {project.updated_at
+                        ? new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                          }).format(new Date(project.updated_at))
+                        : ''}
+                    </span>
+                  </span>
+                  <h2>{project.title}</h2>
+                  <p className="project-summary">{summary}</p>
+                  <span className="project-next">
+                    <span>
+                      {confirmed
+                        ? text('Raporlarını geliştirmeye devam et', 'Keep shaping your reports')
+                        : started
+                          ? text('Proje kapsamını netleştir', 'Refine your project scope')
+                          : text('Fikir sohbetine devam et', 'Continue the idea conversation')}
+                    </span>
+                    <ArrowRight size={18} />
+                  </span>
                 </Link>
-                <p>{project.description.slice(0, 200)}</p>
-                <small>
-                  {text('Revizyon', 'Revision')} {project.revision} ·{' '}
-                  {project.confirmed_revision === project.revision
-                    ? text('Profil onaylı', 'Profile confirmed')
-                    : text('Profil onayı gerekli', 'Profile confirmation needed')}
-                  {project.updated_at
-                    ? ` · ${new Date(project.updated_at).toLocaleString(language === 'tr' ? 'tr-TR' : 'en-GB', { timeZone: 'UTC' })} UTC`
-                    : ''}
-                </small>
-              </div>
-              <div className="actions">
-                <button
-                  onClick={() => navigate(`/w/${workspace.id}/projects/${project.id}/overview`)}
-                >
-                  {text('Aç', 'Open')}
-                </button>
-                {canEdit && (
-                  <Link to={`/w/${workspace.id}/projects/${project.id}/profile`}>
-                    {text('Adı ve profili düzenle', 'Rename and edit profile')}
-                  </Link>
-                )}
                 {canDelete && (
-                  <button
-                    disabled={busy}
-                    onClick={() => {
-                      setDeleting(project);
-                      setConfirmation('');
-                    }}
-                  >
-                    {text('Sil', 'Delete')}
-                  </button>
+                  <details className="project-options">
+                    <summary
+                      aria-label={`${project.title} · ${text('Proje seçenekleri', 'Project options')}`}
+                    >
+                      <Ellipsis size={19} />
+                    </summary>
+                    <button
+                      onClick={() => {
+                        setDeleting(project);
+                        setConfirmation('');
+                        setError('');
+                      }}
+                    >
+                      {text('Projeyi sil', 'Delete project')}
+                    </button>
+                  </details>
                 )}
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
-      </section>
-      {deleting && canDelete && (
-        <section
-          className="panel"
-          role="alertdialog"
-          aria-label={text('Proje silme onayı', 'Confirm project deletion')}
-        >
+      ) : (
+        <section className="project-empty">
+          <span className="empty-illustration">
+            {query ? <Search size={34} /> : <FolderOpen size={38} strokeWidth={1.2} />}
+          </span>
           <h2>
-            {text('Projeyi kalıcı sil', 'Permanently delete project')}: {deleting.title}
+            {query
+              ? text('Bu aramada proje yok', 'No projects match this search')
+              : text('İlk fikrine bir yer açalım', 'Make a home for your first idea')}
           </h2>
           <p>
-            {text(
-              'Proje ve ilişkili kayıtlar geri alınamaz. Onaylamak için proje adını yazın.',
-              'The project and associated records cannot be restored. Type the project title to confirm.',
-            )}
+            {query
+              ? text('Başka bir ad veya kelime dene.', 'Try another name or keyword.')
+              : text(
+                  'Uzun formlar yok. Aklındakini anlat; kapsamını, raporlarını ve uygun destekleri birlikte geliştirelim.',
+                  'No long forms. Tell us what’s on your mind; we’ll shape the project, reports and relevant support together.',
+                )}
           </p>
-          <label>
-            {text('Proje adı', 'Project title')}
-            <input value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
-          </label>
-          <div className="actions">
-            <button
-              className="danger"
-              disabled={busy || confirmation !== deleting.title}
-              onClick={async () => {
-                if (confirmation !== deleting.title || busy) return;
-                setBusy(true);
-                setError('');
-                try {
-                  await api(`/projects/${deleting.id}`, { method: 'DELETE' });
-                  setDeleting(null);
-                  setConfirmation('');
-                  await onChanged();
-                } catch (error) {
-                  setError(errorMessage(error));
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {text('Kalıcı olarak sil', 'Delete permanently')}
+          {!query && canEdit && (
+            <button className="primary" disabled={creating} onClick={() => void createProject()}>
+              <Sparkles size={17} />
+              {text('Fikrimi anlat', 'Start with my idea')}
             </button>
-            <button disabled={busy} onClick={() => setDeleting(null)}>
-              {text('İptal', 'Cancel')}
-            </button>
-          </div>
+          )}
         </section>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+      {deleting && (
+        <div className="modal-backdrop">
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-project-title"
+            className="confirmation-dialog"
+          >
+            <h2 id="delete-project-title">
+              {text('Bu projeyi silmek istiyor musun?', 'Delete this project?')}
+            </h2>
+            <p>
+              {text(
+                'Proje ve bağlı kayıtlar kalıcı olarak silinir. Onaylamak için proje adını yaz.',
+                'The project and its records will be permanently removed. Type the project name to confirm.',
+              )}
+            </p>
+            <p>
+              <strong>{deleting.title}</strong>
+            </p>
+            <label>
+              {text('Proje adı', 'Project name')}
+              <input
+                value={confirmation}
+                onChange={(event) => setConfirmation(event.target.value)}
+              />
+            </label>
+            <div className="actions">
+              <button disabled={deleteBusy} onClick={() => setDeleting(null)}>
+                {text('Vazgeç', 'Cancel')}
+              </button>
+              <button
+                className="danger"
+                disabled={deleteBusy || confirmation !== deleting.title}
+                onClick={async () => {
+                  setDeleteBusy(true);
+                  try {
+                    await api(`/projects/${deleting.id}`, { method: 'DELETE' });
+                    setDeleting(null);
+                    await onChanged();
+                  } catch (reason) {
+                    setError(errorMessage(reason));
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+              >
+                {text('Kalıcı olarak sil', 'Delete permanently')}
+              </button>
+            </div>
+            {error && (
+              <p role="alert" className="error">
+                {error}
+              </p>
+            )}
+          </section>
+        </div>
       )}
     </div>
   );

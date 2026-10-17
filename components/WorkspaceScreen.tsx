@@ -7,6 +7,7 @@ import { COUNTRIES, type Usage, type Workspace } from '../types';
 
 const IncorporationGuide = lazy(() => import('./IncorporationGuide'));
 const TeamManagement = lazy(() => import('./TeamManagement'));
+const WorkspaceActivity = lazy(() => import('./WorkspaceActivity'));
 
 interface WorkspaceProps {
   workspace: Workspace;
@@ -604,6 +605,7 @@ export default function WorkspaceScreen({
           ['ai', 'AI politikası', 'AI policy'],
           ['usage', 'Kullanım', 'Usage'],
           ['privacy', 'Gizlilik', 'Privacy'],
+          ['activity', 'Geçmiş', 'Activity'],
           ...(workspace.country === 'TR'
             ? [['incorporation', 'Türkiye kuruluş rehberi', 'Türkiye incorporation']]
             : []),
@@ -631,6 +633,8 @@ export default function WorkspaceScreen({
           <WorkspaceUsage key={workspace.id} usage={usage} onUsage={onUsage} />
         ) : section === 'privacy' ? (
           <WorkspacePrivacy key={workspace.id} workspace={workspace} onChanged={onChanged} />
+        ) : section === 'activity' ? (
+          <WorkspaceActivity key={workspace.id} workspace={workspace} />
         ) : section === 'incorporation' && workspace.country === 'TR' ? (
           <IncorporationGuide key={workspace.id} workspace={workspace} />
         ) : (

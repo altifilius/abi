@@ -1,3 +1,12 @@
+import {
+  Bell,
+  ChevronDown,
+  CircleHelp,
+  LogOut,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -9,252 +18,201 @@ interface Props {
   children: ReactNode;
   session: Session;
   workspace: Workspace | null;
-  projects: Project[];
   project: Project | null;
   route: ProductRoute;
   unreadCount: number;
   onLogout: () => void;
 }
-const MENU_LABELS: Record<string, [string, string]> = {
-  overview: ['Özet', 'Overview'],
-  projects: ['Projeler', 'Projects'],
-  funding: ['Fon keşfi', 'Funding discovery'],
-  applications: ['Başvurular', 'Applications'],
-  documents: ['Belgeler', 'Documents'],
-  tasks: ['Görevler', 'Tasks'],
-  calendar: ['Takvim', 'Calendar'],
-  workspace: ['Çalışma alanı yönetimi', 'Workspace management'],
-  'workspace-create': ['Yeni çalışma alanı', 'New workspace'],
-  account: ['Hesap ve tercihler', 'Account and preferences'],
-  notifications: ['Bildirimler', 'Notifications'],
-  admin: ['Yönetici konsolu', 'Administration'],
-  help: ['Yardım', 'Help'],
-};
 
 export default function Layout({
   children,
   session,
   workspace,
-  projects,
   project,
   route,
   unreadCount,
   onLogout,
 }: Props) {
   const { text } = useI18n();
-  const navigate = useNavigate();
   const location = useLocation();
-  const drawer = useRef<HTMLDialogElement>(null);
-  const menuButton = useRef<HTMLButtonElement>(null);
-  const [mobileLocation, setMobileLocation] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [userLocation, setUserLocation] = useState<string | null>(null);
-  const mobileOpen = mobileLocation === location.key;
   const userOpen = userLocation === location.key;
+  const userMenu = useRef<HTMLDivElement>(null);
+  const userButton = useRef<HTMLButtonElement>(null);
+  const viewport = useRef<HTMLDivElement>(null);
   const prefix = workspace ? `/w/${encodeURIComponent(workspace.id)}` : '';
-  const mainMenus = [
-    'overview',
-    'projects',
-    'funding',
-    'applications',
-    'documents',
-    'tasks',
-    'calendar',
-  ];
-  const labels = MENU_LABELS[route.menu] || [text('Sayfa', 'Page'), text('Sayfa', 'Page')];
-  const contextualAction =
-    project && route.menu === 'projects'
-      ? {
-          to: `${prefix}/projects/${project.id}/${route.section === 'profile' || route.section === 'budget' ? 'eligibility' : 'profile'}`,
-          label:
-            route.section === 'profile' || route.section === 'budget'
-              ? text('Uygunluğu değerlendir', 'Evaluate eligibility')
-              : text('Profili düzenle', 'Edit profile'),
-        }
-      : route.applicationId
-        ? {
-            to: `${prefix}/applications/${route.applicationId}/${route.section === 'review' ? 'package' : 'review'}`,
-            label:
-              route.section === 'review'
-                ? text('Onaylı paket', 'Approved package')
-                : text('İnceleme ve onay', 'Review and approval'),
-          }
-        : { to: `${prefix}/projects?create=true`, label: text('Yeni proje', 'New project') };
-  useEffect(() => {
-    if (mobileOpen) drawer.current?.showModal();
-    else drawer.current?.close();
-  }, [mobileOpen]);
-  const navigation = (
-    <>
-      <div className="sidebar-brand">
-        <strong>Abi</strong>
-        <span>{text('Proje çalışma alanı', 'Project workspace')}</span>
-      </div>
-      <nav aria-label={text('Ana menüler', 'Main menus')}>
-        {mainMenus.map((menu) => (
-          <NavLink
-            key={menu}
-            to={prefix ? `${prefix}/${menu}` : '/account/identity'}
-            end={menu === 'overview'}
-            className={({ isActive }) => (isActive && route.menu === menu ? 'selected' : '')}
-          >
-            {text(...MENU_LABELS[menu])}
-            {['applications', 'tasks'].includes(menu) && workspace?.plan === 'free' && (
-              <small className="menu-entitlement">Pro</small>
-            )}
-          </NavLink>
-        ))}
-      </nav>
-      <nav
-        className="secondary-navigation"
-        aria-label={text('Yönetim ve yardım', 'Management and help')}
-      >
-        <NavLink
-          to={prefix ? `${prefix}/workspace/info` : '/workspaces/new'}
-          className={route.menu === 'workspace' ? 'selected' : ''}
-        >
-          {text('Çalışma alanı yönetimi', 'Workspace management')}
-        </NavLink>
-        <NavLink to="/help">{text('Yardım', 'Help')}</NavLink>
-        {session.user.is_admin && (
-          <NavLink to="/admin/sources">{text('Yönetici konsolu', 'Administration')}</NavLink>
-        )}
-      </nav>
-    </>
+  const projectsPath = prefix ? `${prefix}/projects` : '/workspaces/new';
+  const fundingPath = prefix ? `${prefix}/funding` : '/workspaces/new';
+  const fundingActive = route.menu === 'funding';
+  const projectActive = ['projects', 'applications', 'documents', 'tasks', 'calendar'].includes(
+    route.menu,
   );
+  useEffect(() => {
+    const update = () => {
+      viewport.current?.style.setProperty(
+        '--workspace-height',
+        `${window.visualViewport?.height || window.innerHeight}px`,
+      );
+    };
+    update();
+    window.visualViewport?.addEventListener('resize', update);
+    window.addEventListener('resize', update);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  useEffect(() => {
+    if (!userOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !userMenu.current?.contains(event.target))
+        setUserLocation(null);
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setUserLocation(null);
+        userButton.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', dismissOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('keydown', dismissOnEscape);
+    };
+  }, [userOpen]);
   return (
-    <div className="product-shell">
+    <div className="product-shell" ref={viewport}>
       <a className="skip-link" href="#main-content">
         {text('Ana içeriğe geç', 'Skip to main content')}
       </a>
-      <aside className="desktop-sidebar">{navigation}</aside>
-      <header className="product-topbar">
-        <button
-          ref={menuButton}
-          className="mobile-menu"
-          type="button"
-          aria-controls="mobile-navigation"
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileLocation(location.key)}
-        >
-          {text('Menü', 'Menu')}
-        </button>
-        <div className="header-selectors">
-          <label>
-            {text('Çalışma alanı', 'Workspace')}
-            <select
-              value={workspace?.id || ''}
-              onChange={(event) =>
-                navigate(`/w/${encodeURIComponent(event.target.value)}/overview`)
-              }
-            >
-              {!workspace && <option value="">{text('Seçin', 'Select')}</option>}
-              {session.workspaces.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {text('Proje', 'Project')}
-            <select
-              value={project?.id || ''}
-              onChange={(event) =>
-                navigate(
-                  event.target.value
-                    ? `${prefix}/projects/${encodeURIComponent(event.target.value)}/overview`
-                    : `${prefix}/projects`,
-                )
-              }
-              disabled={!workspace}
-            >
-              <option value="">{text('Proje seçin', 'Select project')}</option>
-              {projects.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <span className="plan">{workspace?.plan.toUpperCase() || 'FREE'}</span>
-        <Link
-          className="notification-trigger"
-          to="/notifications"
-          aria-label={`${text('Bildirimler', 'Notifications')}: ${unreadCount}`}
-        >
-          {text('Bildirimler', 'Notifications')}
-          {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
-        </Link>
-        <div className="user-menu">
-          <button
-            type="button"
-            aria-expanded={userOpen}
-            aria-controls="user-navigation"
-            onClick={() => setUserLocation(userOpen ? null : location.key)}
+      <header className="product-header">
+        <div className="product-header-inner">
+          <Link
+            className="brand"
+            to={projectsPath}
+            aria-label={text('Abi · Projelerim', 'Abi · My projects')}
           >
-            {session.user.name}
-          </button>
-          {userOpen && (
-            <nav
-              id="user-navigation"
-              aria-label={text('Kullanıcı menüsü', 'User menu')}
-              className="user-dropdown"
+            <span className="brand-mark" aria-hidden="true">
+              <Sparkles size={21} strokeWidth={1.7} />
+            </span>
+            <span>
+              abi<span className="brand-dot">.</span>
+            </span>
+          </Link>
+          <nav className="primary-navigation" aria-label={text('Ana gezinme', 'Main navigation')}>
+            <NavLink
+              to={projectsPath}
+              className={projectActive ? 'selected' : ''}
+              aria-current={projectActive ? 'page' : undefined}
             >
-              <Link to="/account/identity">{text('Hesabım', 'My account')}</Link>
-              <Link to="/account/security">{text('Hesap güvenliği', 'Account security')}</Link>
-              <Link to="/account/preferences">
-                {text('Dil, tema ve bildirimler', 'Language, theme and notifications')}
-              </Link>
-              <Link to="/account/privacy">{text('Veri ve gizlilik', 'Data and privacy')}</Link>
-              <button type="button" onClick={onLogout}>
-                {text('Çıkış yap', 'Sign out')}
+              {text('Projelerim', 'My projects')}
+            </NavLink>
+            <NavLink
+              to={fundingPath}
+              className={fundingActive ? 'selected' : ''}
+              aria-current={fundingActive ? 'page' : undefined}
+            >
+              {text('Destek bul', 'Find support')}
+            </NavLink>
+          </nav>
+          <div className="header-account">
+            <Link
+              className="icon-button notification-trigger"
+              to="/notifications"
+              aria-label={`${text('Bildirimler', 'Notifications')}: ${unreadCount}`}
+            >
+              <Bell size={20} strokeWidth={1.7} />
+              {unreadCount > 0 && (
+                <span className="notification-dot">{unreadCount > 9 ? '9+' : unreadCount}</span>
+              )}
+            </Link>
+            <div className="user-menu" ref={userMenu}>
+              <button
+                ref={userButton}
+                className="account-trigger"
+                type="button"
+                aria-expanded={userOpen}
+                aria-controls="user-navigation"
+                aria-label={text('Hesap menüsü', 'Account menu')}
+                onClick={() => setUserLocation(userOpen ? null : location.key)}
+              >
+                <span className="user-avatar">
+                  {session.user.name.trim().slice(0, 1).toLocaleUpperCase()}
+                </span>
+                <ChevronDown size={14} />
               </button>
-            </nav>
-          )}
+              {userOpen && (
+                <nav
+                  id="user-navigation"
+                  className="user-dropdown"
+                  aria-label={text('Hesap ve çalışma alanları', 'Account and workspaces')}
+                >
+                  <div className="user-dropdown-heading">
+                    <strong>{session.user.name}</strong>
+                    <span>{session.user.email}</span>
+                  </div>
+                  <label className="workspace-switcher">
+                    {text('Çalışma alanı', 'Workspace')}
+                    <select
+                      value={workspace?.id || ''}
+                      onChange={(event) =>
+                        navigate(`/w/${encodeURIComponent(event.target.value)}/projects`)
+                      }
+                    >
+                      {!workspace && <option value="">{text('Seçin', 'Select')}</option>}
+                      {session.workspaces.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Link to="/account/identity">
+                    <Settings2 size={16} />
+                    {text('Hesap ve tercihler', 'Account and preferences')}
+                  </Link>
+                  {prefix && (
+                    <Link to={`${prefix}/workspace/info`}>
+                      {text('Çalışma alanı ve ekip', 'Workspace and team')}
+                    </Link>
+                  )}
+                  <Link to="/workspaces/new">{text('Yeni çalışma alanı', 'New workspace')}</Link>
+                  <Link to="/help">
+                    <CircleHelp size={16} />
+                    {text('Yardım', 'Help')}
+                  </Link>
+                  {session.user.is_admin && (
+                    <Link to="/admin/sources">
+                      <ShieldCheck size={16} />
+                      {text('Yönetici konsolu', 'Administration')}
+                    </Link>
+                  )}
+                  <button type="button" onClick={onLogout}>
+                    <LogOut size={16} />
+                    {text('Çıkış yap', 'Sign out')}
+                  </button>
+                </nav>
+              )}
+            </div>
+          </div>
         </div>
       </header>
-      <div className="content-location">
-        <nav aria-label={text('Konum', 'Breadcrumb')}>
-          {workspace && (
-            <>
-              <Link to={`${prefix}/overview`}>{workspace.name}</Link>
-              <span aria-hidden="true"> / </span>
-            </>
-          )}
-          <span>{text(...labels)}</span>
-          {project && (
-            <>
-              <span aria-hidden="true"> / </span>
-              <Link to={`${prefix}/projects/${project.id}/overview`}>{project.title}</Link>
-            </>
-          )}
-        </nav>
-        {workspace && (
-          <Link className="button-link" to={contextualAction.to}>
-            {contextualAction.label}
+      <main
+        id="main-content"
+        className={`main-content${route.section === 'report' ? ' editor-page' : ''}${route.section === 'ai' ? ' studio-page' : ''}`}
+        tabIndex={-1}
+        data-menu={route.menu}
+        data-section={route.section || 'list'}
+      >
+        {project && !['projects', 'funding'].includes(route.menu) && (
+          <Link className="context-back" to={`${prefix}/projects/${project.id}/overview`}>
+            ← {project.title} · {text('Proje dosyası', 'Project file')}
           </Link>
         )}
-      </div>
-      <main id="main-content" className="main-content" tabIndex={-1}>
         {children}
       </main>
-      <dialog
-        id="mobile-navigation"
-        ref={drawer}
-        className="mobile-navigation"
-        aria-label={text('Ana gezinme', 'Main navigation')}
-        onCancel={() => setMobileLocation(null)}
-        onClose={() => {
-          setMobileLocation(null);
-          menuButton.current?.focus();
-        }}
-      >
-        <button type="button" className="drawer-close" onClick={() => setMobileLocation(null)}>
-          {text('Menüyü kapat', 'Close menu')}
-        </button>
-        {navigation}
-      </dialog>
     </div>
   );
 }

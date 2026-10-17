@@ -104,7 +104,7 @@ export default function CalendarScreen({
     if (event.call_id) return `${root}/funding/calls/${encodeURIComponent(event.call_id)}`;
     if (event.project_id)
       return `${root}/projects/${encodeURIComponent(event.project_id)}/overview`;
-    return `${root}/overview`;
+    return `${root}/projects`;
   }
 
   function selectionCheckbox(event: CalendarEvent) {

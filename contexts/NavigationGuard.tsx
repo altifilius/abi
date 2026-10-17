@@ -20,10 +20,11 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
   const { text } = useI18n();
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
   const discardHandlers = useRef<Record<string, (() => void) | undefined>>({});
+  const dirtyRef = useRef(false);
   const dirty = dirtyIds.size > 0;
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      dirty &&
+      dirtyRef.current &&
       `${currentLocation.pathname}${currentLocation.search}` !==
         `${nextLocation.pathname}${nextLocation.search}`,
   );
@@ -31,6 +32,7 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
     setDirty(id, isDirty, onDiscard) {
       if (isDirty) discardHandlers.current[id] = onDiscard;
       else delete discardHandlers.current[id];
+      dirtyRef.current = Object.keys(discardHandlers.current).length > 0;
       setDirtyIds((previous) => {
         if (previous.has(id) === isDirty) return previous;
         const next = new Set(previous);
@@ -52,11 +54,15 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', beforeUnload);
   }, [dirty]);
   useEffect(() => {
+    if (blocker.state === 'blocked' && !dirty) {
+      blocker.proceed();
+      return;
+    }
     if (blocker.state === 'blocked') {
       dialogRef.current?.showModal();
       stayRef.current?.focus();
     } else dialogRef.current?.close();
-  }, [blocker.state]);
+  }, [blocker.state, dirty, blocker]);
   return (
     <GuardContext.Provider value={registry}>
       <DirtyContext.Provider value={dirty}>
@@ -91,6 +97,7 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
               onClick={() => {
                 for (const id of dirtyIds) discardHandlers.current[id]?.();
                 discardHandlers.current = {};
+                dirtyRef.current = false;
                 setDirtyIds(new Set());
                 if (blocker.state === 'blocked') blocker.proceed();
               }}

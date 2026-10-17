@@ -577,7 +577,7 @@ function TaskEditor({
               'These comments are shared by the entire project, not a task-specific thread.',
             )}
           </p>
-          <Link to={`/w/${workspace.id}/projects/${task.project_id}/conversation`}>
+          <Link to={`/w/${workspace.id}/projects/${task.project_id}/ai/idea`}>
             {text('Proje konuşmasını aç', 'Open project conversation')}
           </Link>
           {workspace.plan === 'pro' && (

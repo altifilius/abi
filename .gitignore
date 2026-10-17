@@ -45,5 +45,8 @@ var/
 backups/
 *.tar.gz
 
+# Local browser verification artifacts
+.playwright-mcp/
+
 # Bun is the canonical package manager
 package-lock.json

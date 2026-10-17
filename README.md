@@ -4,30 +4,32 @@ Girişimciler ve şirket ekipleri için kaynaklı fon keşfi, proje yazımı ve 
 
 Bu yerel teslimatın kaynak, build ve çalışma dizini **`/home/emre/Projects/abi`**. `abi-upgrade` çalıştırma veya teslimat hedefi değildir. `dist/` bu dizinde üretilir; FastAPI aynı dizinin build’ini sunar.
 
-Çalışma alanı yükseltmesi `upgrade/workspace-build` dalında yayımlandı; güncel menü/hesap geliştirmeleriyle birleşen devam dalı `upgrade/menu-workspace-execution`. Klasörler arasında dosya kopyalamak yerine bu dizinde Git pull/merge kullanın. `abi.service` ve `abi-worker.service` bu dizinin `.venv-menu` ortamını çalıştırır.
+Çalışma alanı yükseltmesi `upgrade/workspace-build` dalında yayımlandı; güncel menü/hesap geliştirmeleriyle birleşen devam dalı `upgrade/menu-workspace-execution`. Klasörler arasında dosya kopyalamak yerine bu dizinde Git pull/merge kullanın. `abi.service`, `abi-worker.service` ve `abi-source-watch.service` bu dizinin `.venv-menu` ortamını çalıştırır.
 
 ## Bu build’in kapsamı
 
-- **Free:** kalıcı kişisel projeler, sohbet ve yapılandırılmış profil, kullanıcı onaylı AI profil önerileri, düzenlenebilir genel proje taslağı, gerçek DOCX/PDF indirme ve resmî kaynaklı fon keşfi.
+- **Free:** kalıcı kişisel projeler, fikir sohbeti ve kullanıcı onaylı kapsam/ülke, beş şablonlu proje raporu, rapora özel AI konuşması, elle zengin metin düzenleme/otomatik kayıt, gerçek DOCX/PDF indirme ve resmî kaynaklı destek keşfi.
 - **Pro:** çalışma alanı başına en fazla üç üye, kaynak/sürüm bağlı uygunluk değerlendirmesi, bütçe kontrolleri, özel belge deposu ve yerel OCR, belge AI önerileri, çağrı dilinde başvuru yazımı, görev/yorum/inceleme, insan onayından sonra DOCX/PDF/ZIP hazırlama paketi.
 - **Uygunluk:** deterministik koşullar geçti/kaldı/bilgi eksik/inceleme gerekli olarak değerlendirilir. Sıralama puanı destek kazanma olasılığı değildir. Eksik bilgi ve yoruma açık koşullar kesin uygunluk sayılmaz. İnsan incelemesi kayıtlı ve atıflıdır; resmî kurum kararı değildir.
 - **Sürümleme:** proje revizyonu, çağrı/kural/kaynak sürümü ve değerlendirme zamanı saklanır. Düzenleme onayı geçersizleştirir; eski değerlendirme sessizce değiştirilmez.
-- **Gerçek ürün verisi:** dashboard faaliyetleri, kalıcı şirketleşme öz-kontrolü, görevler, e-posta tercihleri ve gerçek görev/çağrı tarihlerinden ICS aktarımı. Sahte örnek faaliyetler yoktur.
+- **Gerçek ürün verisi:** proje içi yapılacaklar/tarihler, çalışma alanı faaliyet geçmişi, kalıcı şirketleşme öz-kontrolü, görevler, e-posta tercihleri ve gerçek görev/çağrı tarihlerinden ICS aktarımı. Sahte örnek faaliyetler yoktur.
 - **Dil/erişim:** Türkçe/İngilizce arayüz, açık/koyu tema ve mobil klavye erişimi. Başvuru yazımı çağrının yayımlanmış dilini kullanır ve final onayında dil incelemesi gerekir.
 
 ### Menü ve kalıcı URL’ler
 
-| Menü | Bölümler |
-|---|---|
-| Özet | Sıradaki iş, projeler, başvuru durumları, yaklaşan tarihler, kullanım ve atıflı faaliyetler |
-| Projeler | Genel bakış, profil, sohbet, Free taslak, Pro bütçe, uygunluk ve revizyon farkları |
-| Fon keşfi | Ülke, kaynakta belirtilen başvuru sahibi, destek türü, çağrı durumu; program/çağrı ve resmî kaynak ayrıntıları |
-| Başvurular | Genel bakış/sorumlu, metin, ayrı başvuru bütçesi, gerçek belge referansları, kontroller, inceleme ve paket |
-| Belgeler | Çalışma alanı özel kasası; orijinal dosya, çıkarılmış metin/OCR, düzenlenebilir AI önerisi ve atıflı inceleme |
-| Görevler | Bana atananlar, tüm/proje görevleri, gerçek başvuru/belge bağlantıları, yorum ve değişiklik geçmişi |
-| Takvim | UTC ay/liste, proje/tür/Bana atanan filtreleri; bütün görünüm veya seçilmiş kayıtların ICS aktarımı |
+Üstte yalnız **Projelerim** ve **Destek bul** vardır. Hesap/bildirimler üst çubuktadır; çalışma alanı geçişi, ekip, kullanım, güvenlik ve yönetici araçları hesap menüsünden açılır.
 
-Çalışma alanı ayarları, kişisel hesap/bildirimler, Yardım ve sistem yöneticisi konsolu ayrı URL’lerdedir. Hesap ve bildirimler proje seçimi istemez; fon keşfi Free’de açık kalır. Free’ye geçiş geçmiş kayıtları silmez; yeni Pro işlemlerine izin vermez. Pro planı viewer rolüne yazma/onay yetkisi vermez.
+- **Projelerim:** iki sütunlu kompakt kartlar ve arama. Yeni proje ad formu olmadan doğrudan fikir sohbetiyle başlar.
+- **Proje dosyası:** sıradaki iş, kapsam bağlantısı, temel raporlar ve her seçili fon için ayrı belge grubu. Aynı anda tek rapor/fon grubu genişler; açık belge, AI ve indirme işlemleri bağlamsaldır. Yapılacaklar/tarihler küçük açılır bölümdedir. Orijinal dosya yükleme, bütçe, uygunluk, insan/dil incelemesi ve final paket kontrolleri korunur.
+- **AI:** Fikir ve Rapor üretimi ayrı oturumlardır; her raporun geçmişi ayrıdır. Soldan açılan panelde çoklu toggle seçimi AI çağrısı yapmaz. Raporlar hazır şablonlarla başlar; başlıklar sıralıdır fakat tamamlanma kilidi yoktur. Konuşmada paragraf/bölüm tarif edilir, taslak mesajlarda geliştirilir; yalnız açık kullanıcı uygulama talimatı kayıtlı raporu değiştirir. Sonraki başlığı kullanıcı başlatır.
+- **Belge editörü:** tam rapor, temel biçimlendirme/listeler/tablolar, otomatik kayıt, hata ve revizyon çakışmasında metni koruma, açılır başlık planı. Genel şablon başlıkları düzenlenebilir; fonun kaynakla belirlenmiş başlıkları sabittir. Kapsam değişince raporlar korunur, açık inceleme gereği gösterilir.
+- **Destek bul:** onaylı proje ülkesine göre yurt içi/yurt dışı; yurt dışında mevcut ülkeden başvuru ve yabancı yapılanma yolları ayrı sekmelerdir. Kaynaklarda bilinmeyen katılım yolu uygun kabul edilmez. Tümünü göster, arama ve açılır filtreler; ayrı ayrıntıda koşul ve resmî kaynaklar bulunur. Destek seçmek belge grubunu ekler, üretim/gönderim başlatmaz. Birden fazla fon seçilebilir.
+
+Çalışma alanı görünür ekran yüksekliğine sığar; üst gezinme ve mesaj kutusu yerinde kalır. Uzun sohbet, belge ve sonuç listeleri kendi panellerinde kayar. Mobilde sohbet/kapsam ve sohbet/belge ayrı görünümlerdir. Kısa/yatay ekranlarda indirme ve filtre seçenekleri ekran içinde, kapatılabilir bir panelde açılır. Kaydetme/kapsam hataları ilgili panelde görünür; otomatik kayıt ve kaydedilmemiş değişiklik koruması devam eder.
+
+Fikir danışmanı son soruya kısa cevap verip her turda bir yararlı bilinmeyeni ele alacak şekilde yönlendirilir; verilen ülke/bilgiyi yeniden istememesi ve geçilen ayrıntıda ısrar etmemesi beklenir. Sağlayıcı `body` ve tek `next_question` (veya kapanışta `null`) döndürür. Çoklu/bozuk soru, eksik alan veya sağlayıcı reddi başarılı mesaj sayılmaz; yanıt kesilmez, uydurma cevap veya haricî sağlayıcıya sessiz geçiş yapılmaz. Üslup ve bağlama uygunluk model kalitesine bağlıdır.
+
+Kalıcı proje yolları `/w/{workspace}/projects/{project}/overview`, `/ai/idea`, `/ai/reports?report={id}`, `/reports/{id}`. Hesap ve bildirimler proje seçimi istemez; keşif Free'de açıktır. Fon hazırlığı/Pro işlemleri sunucu plan/rol sınırlarını korur; viewer yazamaz.
 
 Kaydedilmemiş metin, bütçe, profil önerisi ve inceleme notları geçişte **kal / bırak ve ayrıl** seçimiyle korunur. Onay ve indirme aynı kayıtlı revizyona bağlanır. Önceki alanın geciken yanıtı yeni alanı doldurmaz; daha eski revizyon yeni kaydı geri almaz. Proje bütçesi aktarımı sunucudaki onaylı profil/çağrı/para birimi kontrolleriyle açıkça kaydedilir; kur dönüşümü yapılmaz.
 
@@ -90,11 +92,15 @@ bun run build
 make dev-backend
 ```
 
-Üretim build’i FastAPI üzerinden **http://127.0.0.1:8001** adresinde açılır. Yerelde komutları `/home/emre/Projects/abi` içinde çalıştırın: `make build`, `make migrate`, `make dev`. `make dev-frontend` geliştirme için 3000 portunda çalışır ve `/api` isteklerini 8001’e yönlendirir. Veritabanı şemasının tek otoritesi Alembic’tir; uygulama açılışı tablo oluşturmaz. Güncel geçiş `0004_task_context`; nullable görev bağlantıları ve başvuru sorumlusu ekler, mevcut kayıtları silmez. Migration yapılmamışsa başlangıç hata verir.
+Üretim build’i FastAPI üzerinden **http://127.0.0.1:8001** adresinde açılır. Yerelde komutları `/home/emre/Projects/abi` içinde çalıştırın: `make build`, `make migrate`, `make dev`. `make dev-frontend` geliştirme için 3000 portunda çalışır ve `/api` isteklerini 8001’e yönlendirir. Şemanın tek otoritesi Alembic’tir; güncel geçiş `0005_project_studio`, önceki proje/başvuru kayıtlarını değiştirmeden raporları, ayrı konuşmaları ve fon seçimlerini ekler. Uygulama açılışı tablo oluşturmaz.
 
 ### Yerel AI
 
 Bu makinede kurulmuş servis 11435 loopback portunda, `OLLAMA_NO_CLOUD=true` ile çalışır. `qwen3:1.7b` ve `embeddinggemma` yerel modelleri kullanılır. Ollama için `LOCAL_AI_REASONING_EFFORT=none` açık sağlayıcı seçeneğidir; başka sağlayıcıda uygun şekilde değiştirin. Küçük CPU modelinin yazım kalitesi uzman incelemesi gerektirir; yerel başarı doğruluk garantisi değildir.
+
+Mevcut yerel Ollama süreci model ağırlıklarını `/home/emre/Projects/abi-upgrade/var/models` deposundan kullanır; bu yalnız yerel model verisidir, eski uygulamanın kaynak/build/veritabanı değildir. Bu depo otomatik taşınmadı; model servisini yeniden başlatırken aynı `OLLAMA_MODELS` yolunu koruyun.
+
+Tek-soru güncellemesinde mevcut yerel modelle gerçek üç turlu sohbet çalıştırıldı; yanıt, tek soru ve sorusuz kapanış sözleşmesi geçti. Qwen3 4B/8B, 4B Instruct ve Gemma3 4B denemeleri Türkçe danışmanlık kalitesini güvenilir biçimde iyileştirmediği için canlı model ayarı değiştirilmedi. Küçük model hâlâ kullanıcı dilini taklit edebilir veya zayıf öneri üretebilir; kaliteli danışmanlık ve gerçek bilgi doğrulaması garanti edilmez.
 
 Şirket/kişisel alanın `local` politikası sohbet, belge analizi, çeviri ve embedding için uygulanır. Haricî servise sessiz geçiş olmaz. Eski haricî credential’ın çalıştığı iddia edilmez; bu build’in başarılı AI kabulü yerel servisle yapıldı.
 
@@ -115,6 +121,27 @@ make reminders                           # Kalıcı e-posta/reminder worker
 ```
 
 Yerel Mailpit teslimatları **http://127.0.0.1:18025** üzerinden okunur; gerçek dış alıcıya iletilmez. Yayında gerçek TLS SMTP kullanın. Tercih kaydetmek gönderim değildir; worker gerekir. SMTP teslimatı crash sonrası en az bir kez olabilir; sabit Message-ID korunur. Gönderim hataları sınırlı tekrar sonrası görünür `dead_letter` olur.
+
+### Kalıcı arka plan işçileri
+
+Yerel kullanıcı systemd servislerini proje kökünden kurun. Önce mevcut PostgreSQL, yerel AI ve SMTP servislerini hazır edin; bu unit dosyaları bağımlılık konteynerlerini oluşturmaz veya başlatmaz.
+
+```sh
+systemd-analyze --user verify abi-worker.service abi-source-watch.service
+systemctl --user link "$PWD/abi-worker.service" "$PWD/abi-source-watch.service"
+systemctl --user daemon-reload
+systemctl --user enable --now abi-worker.service abi-source-watch.service
+systemctl --user status abi-worker.service abi-source-watch.service --no-pager
+journalctl --user -u abi-worker.service -u abi-source-watch.service --since today
+```
+
+`abi-worker.service` bildirim/e-posta kuyruğunu başlangıçta ve her turdan 60 saniye sonra işler. `abi-source-watch.service` başlangıçta resmî kaynakları kontrol eder, tur bitiminden 86400 saniye sonra tekrarlar. Değişen kaynaklar ve kopyalanan koşullar **inceleme bekleyen taslaktır**; servisler kaynak veya çağrı yayımlamaz. Hata veya eski heartbeat gerçek `degraded` durumunu korur; yalnız process'in çalışıyor olması başarı değildir.
+
+Kullanıcı oturumu kapandıktan sonra ve açılışta çalışmak için systemd kullanıcı yöneticisinin açık kalması gerekir (`loginctl show-user "$USER" -p Linger`). Yerel kurulumda linger açıktır; bu, Docker konteynerlerinin veya AI servisinin yeniden başlatma politikasını değiştirmez. İşçileri durdurmak/devre dışı bırakmak için:
+
+```sh
+systemctl --user disable --now abi-worker.service abi-source-watch.service
+```
 
 ### İşletim durumu
 
@@ -155,17 +182,9 @@ Geri yükleme boş hedef ister; mevcut kayıtları temizleyen `--clean` kullanma
 
 ## Ekran bazlı JS yükleme
 
-Oturum, ana gezinme, giriş formu ve başlangıç özeti ilk pakette kalır. Hesap/yönetici/başvuru/belge/görev/takvim/fon ekranları; proje profil/sohbet/taslak/bütçe/uygunluk/geçmiş bölümleri ve ekip/kuruluş rehberi açıldığında `React.lazy` ile yüklenir. `Suspense` yalnız ilgili içeriği kapsar; menü, üst çubuk ve kaydedilmemiş değişiklik koruması yükleme sırasında yerinde kalır. Menü/bölüm kimlikleri eski ekranın yükleme sırasında görünmesini engeller; başvuru sekmelerinin ortak düzenleme state’i korunur.
+Oturum, iki ana gezinme ve giriş formu ilk pakettedir. Proje ekranları, fikir/rapor oturumları, Tiptap tabanlı zengin belge editörü ve yönetim araçları ihtiyaç anında yüklenir. Editör kodu ilk girişte indirilmez. `Suspense` yalnız ilgili içeriği kapsar; ana gezinme yerinde kalır.
 
-| JS çıktısı (ondalık kB) | Önce | Sonra |
-|---|---:|---:|
-| İlk paket | 651.05 | 418.37 |
-| İlk paketin gzip boyutu | 197.97 | 131.94 |
-| Bütün JS parçaları toplamı | 651.05 | 658.46 |
-
-Bu, toplam kodu küçültmekten çok ilk yükü ertelemektir: açılmayan ekranlar başlangıçta indirilmez. İlk ham yük %35,7, gzip boyutu %33,4 azaldı; parçalama metadata’sı toplam JS’yi yaklaşık %1,1 artırdı. Gzip rakamları build ölçümüdür; FastAPI’nin mevcut statik sunumu için sıkıştırılmış HTTP aktarım iddiası değildir. Vite büyük chunk uyarısı artık yok; eşik yükseltilmedi. Zod bağımlılığının yorum konumundan kaynaklanan Rollup annotation uyarısı sürüyor.
-
-Gerçek tarayıcıda soğuk giriş/özetin yalnız ilk JS paketini istediği, proje ekranlarının açılınca indirilmesi, yavaş ağda loading+ana menü, stay/discard, kayıt sonrası reload, doğrudan detay URL’leri ve mobil gezinme doğrulandı. Bu değişiklik backend/schema, ödeme, portal gönderimi veya yayın ayarlarını değiştirmez.
+Son üretim build'inde ilk JS paketi 413,97 kB (gzip 131,37 kB), zengin belge editörü parçası 478,20 kB (gzip 153,75 kB). Bu ilk yük ertelemesidir; bütün kodun toplamı için küçülme iddiası değildir. Zod kaynak yorumlarından iki Rollup annotation uyarısı sürer; büyük chunk eşiği yükseltilmedi.
 
 ## Doğrulama
 
@@ -185,4 +204,4 @@ ABI_TEST_DATABASE_URL='postgresql+asyncpg://user:password@host/abi_tests' \
   .venv-menu/bin/python -m unittest discover -s backend/tests -v
 ```
 
-Bu menü teslimatında üretim build’i, **23 frontend ve 114 backend davranış testi** (ayrı, boş ve migration’lı PostgreSQL dahil) geçti. Gerçek tarayıcıda Free DOCX/PDF; Pro kaynak yayını → uygunluk/atıflı inceleme → metin/belge → insan/dil onayı → ZIP; bütçe aktarımı; kaydedilmemiş içerik koruması; geciken yanıtla çalışma alanı izolasyonu; tipli nesne/listeler; özel dosya, yerel OCR ve AI belge önerisi; görev/belge/başvuru bağlantıları ve atıflı geçmiş; kaynaklı önkayıt/Bana atanan/seçili ICS; e-posta doğrulama ve gerçek tek kullanımlık parola kurtarma; bildirim okuma; DB+özel dosya yedek/geri yükleme ve aynı SHA-256 ile orijinal indirme doğrulandı. JS/Python bağımlılık auditleri ve Bandit temiz geçti. Son ekran bazlı yükleme değişiminde Biome, TypeScript, 23 frontend testi, production build ve gerçek tarayıcı smoke yeniden geçti; backend değişmedi. Bütün resmî portal akışları, ödeme tahsilatı, SMTP/haricî AI yayın sağlayıcısı ve internete açık HTTPS dağıtımı doğrulanmış değildir.
+Bu yeniden tasarımda **27 frontend ve 165 backend davranış testi** (ayrı migration'lı PostgreSQL dahil), frontend/backend lint, TypeScript ve üretim build'i geçti. Gerçek yerel modelle fikir sohbeti/kapsam önerisi, insan onayı, ayrı rapor konuşmaları, başlığı konuşmada tarif ederek taslak yazımı ve açık uygulama talimatı çalıştırıldı. Tarayıcıda otomatik kayıt/tablo/reload, başlık ekleme, biçimlendirilmiş Unicode PDF/DOCX indirme, çoklu fon grubu, kaynaklı bölge ayrımları, görev ekleme, kapsam değişince inceleme işareti ve kayıt hatasında çıkış engeli doğrulandı. TR/EN, açık/koyu, masaüstü/mobil yüzeyler açıldı. Migration öncesi DB+dosya yedeği ayrı boş hedefte 0004 şeması ve aynı proje hash'iyle geri yüklendi; canlı DB 0005'e geçirildi. Bun/pip bağımlılık auditleri ve Bandit temiz geçti. Önceki başvuru inceleme/paket güvenlik testleri korunur; bütün resmî portallar, gerçek ödeme, haricî sağlayıcı ve internete açık HTTPS dağıtımı bu değişiklikte doğrulanmış değildir.
